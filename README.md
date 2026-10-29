@@ -6,7 +6,17 @@
 
 The project is documented in Bahasa Indonesia in [docs/PANDUAN.md](docs/PANDUAN.md), the full user guide. Research results are in [docs/findings.md](docs/findings.md).
 
+![Meme-coin dashboard: PnL, live trade chart, equity, animated execution pipeline](docs/screenshots/meme-dashboard.png)
+
 ---
+
+## Screenshots
+
+| Strategy Lab: leaderboard, equity curves, live feed | Risk analytics: result matrix, Monte Carlo, open positions |
+|---|---|
+| ![Strategy Lab](docs/screenshots/strategy-lab.png) | ![Risk analytics](docs/screenshots/risk-analytics.png) |
+| **Altcoin and futures: leaderboard with backtests, AI training report** | **Altcoin market: live equity, positions with liquidation price, trend scanner** |
+| ![Altcoin and futures](docs/screenshots/altcoin-futures.png) | ![Altcoin market](docs/screenshots/altcoin-market.png) |
 
 ## What it does
 
