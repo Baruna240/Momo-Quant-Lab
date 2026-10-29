@@ -204,6 +204,14 @@ td.num, th.num { text-align: right; }
 .pick tbody tr:hover { background: var(--panel-2); }
 .pick tbody tr.sel { background: var(--panel-2); box-shadow: inset 3px 0 0 var(--cyan); }
 .foot { color: var(--muted); font-size: 10.5px; margin-top: 12px; line-height: 1.6; }
+.themes { display: inline-flex; border: 1px solid var(--line-2); border-radius: 4px; overflow: hidden; }
+.themes span { color: var(--muted); padding: 3px 7px; font-size: 10px; letter-spacing: .1em; border-right: 1px solid var(--line-2); }
+.themes a { padding: 3px 9px; color: var(--text-2); font-size: 11px; }
+.themes a.on { background: var(--cyan); color: #06121a; font-weight: 700; }
+.themes a:not(.on):hover { background: var(--panel-2); color: var(--text); }
+.tfs { display: inline-flex; gap: 3px; margin-left: 6px; }
+.tfs button { white-space: nowrap; font: 600 10px var(--mono); color: var(--text-2); background: var(--panel-2); border: 1px solid var(--line-2); border-radius: 3px; padding: 1px 7px; cursor: pointer; letter-spacing: .06em; }
+.tfs button[aria-pressed="true"] { background: var(--cyan); color: #06121a; border-color: var(--cyan); font-weight: 700; }
 </style>
 </head>
 <body>
@@ -214,6 +222,7 @@ td.num, th.num { text-align: right; }
     <span class="sim-badge">SIMULASI</span>
     <div class="scopes" id="scopes"></div>
     <a class="chip" href="/alt" title="Simulasi altcoin & koin besar">ALTCOIN <b>→</b></a>
+    <span class="themes" title="Ganti tema tampilan (data sama)"><span>TEMA</span><a href="/" class="on">TERMINAL</a><a href="/lab">ABYSS</a></span>
     <div class="grow"></div>
     <span class="chip"><span class="live" id="live"></span><span id="live-txt">MEMUAT</span></span>
     <span class="chip">SOL <b id="sol">–</b></span>
@@ -240,7 +249,7 @@ td.num, th.num { text-align: right; }
     <!-- COIN CHART + PERTUMBUHAN MODAL -->
     <section class="panel span-7 split">
       <div class="sub">
-        <div class="ph"><span class="ix">02</span> <span id="coin-title">CHART KOIN</span> <span class="r" id="coin-links"></span></div>
+        <div class="ph"><span class="ix">02</span> <span id="coin-title">CHART KOIN</span> <span class="tfs" id="coin-tf"><button data-m="15" aria-pressed="true">15 DTK</button><button data-m="60" aria-pressed="false">1 MNT</button><button data-m="300" aria-pressed="false">5 MNT</button><button data-m="line" aria-pressed="false">GARIS</button></span> <span class="r" id="coin-links"></span></div>
         <div class="legend" id="coin-legend">Klik koin di feed atau tabel untuk melihat chart-nya.</div>
         <div class="chart coin" id="coin-chart"></div>
       </div>
@@ -938,14 +947,34 @@ async function renderTable() {
 }
 
 // ================= coin chart
-let coinChart, coinSeries, coinData;
+let coinChart, coinSeries, coinData, coinMode = "15";   // mode chart: detik per candle, atau "line"
 function selectCoin(key) {
   selected = key;
   document.querySelectorAll("tr.sel").forEach(t => t.classList.remove("sel"));
   document.querySelectorAll(`tr[data-key="${CSS.escape(key)}"]`).forEach(t => t.classList.add("sel"));
   loadCoin();
-  if (innerWidth < 1100) document.getElementById("coin-chart").scrollIntoView({ behavior: "smooth", block: "center" });
+  document.getElementById("coin-chart").scrollIntoView({ behavior: "smooth", block: "center" });   // selalu kembali ke chart setelah memilih koin
 }
+function fitCoinChart(chart, el, n, candle) {   // candle sedikit: lebar tetap & rata kanan, bukan diregangkan selebar panel
+  const ts = chart.timeScale();
+  if (candle && n * 12 < el.clientWidth) { ts.applyOptions({ barSpacing: 12, rightOffset: 3 }); ts.scrollToRealTime(); }
+  else { ts.applyOptions({ rightOffset: 0 }); ts.fitContent(); }
+}
+function memeCandles(d, sec) {   // titik harga rekaman bot -> candle OHLC (kelipatan dari harga beli)
+  const pts = d.prices.map(([t, pr]) => [t, pr / d.entry]);
+  d.trades.forEach(t => pts.push([t.ts, t.side === "BELI" ? 1 : t.price_sol / d.entry]));
+  pts.sort((a, b) => a[0] - b[0]);
+  const out = [];
+  for (const [t, v] of pts) {
+    const b = Math.floor(t / sec) * sec, cur = out.at(-1);
+    if (!cur || cur.b !== b) out.push({ b, open: cur ? cur.close : v, high: Math.max(v, cur ? cur.close : v), low: Math.min(v, cur ? cur.close : v), close: v });
+    else { cur.high = Math.max(cur.high, v); cur.low = Math.min(cur.low, v); cur.close = v; }
+  }
+  return out.map(c => ({ time: c.b + TZ, open: c.open, high: c.high, low: c.low, close: c.close }));
+}
+document.querySelectorAll("#coin-tf button").forEach(b => b.onclick = () => {
+  coinMode = b.dataset.m; document.querySelectorAll("#coin-tf button").forEach(x => x.setAttribute("aria-pressed", x === b)); loadCoin();
+});
 async function loadCoin() {
   if (!selected) {
     const open = (S.feed || []).find(f => f.side === "BELI");
@@ -964,28 +993,36 @@ async function loadCoin() {
   d.prices.forEach(([t, pr]) => pts.set(Math.floor(t), pr / d.entry));
   d.trades.forEach(t => pts.set(Math.floor(t.ts), t.side === "BELI" ? 1 : t.price_sol / d.entry));
   const data = [...pts.entries()].sort((a, b) => a[0] - b[0]).map(([t, v]) => ({ time: t + TZ, value: v }));
+  const candle = coinMode !== "line", sec = candle ? +coinMode : 0;
   const el = document.getElementById("coin-chart");
   if (!coinChart) { el.innerHTML = ""; coinChart = LightweightCharts.createChart(el, chartOptions()); coinChart.subscribeCrosshairMove(coinLegend); }
   if (coinSeries) coinChart.removeSeries(coinSeries);
-  const up = (data.at(-1)?.value ?? 1) >= 1;
-  coinSeries = coinChart.addAreaSeries({ lineColor: up ? css("--green") : css("--red"), lineWidth: 2,
-    topColor: up ? "rgba(34,197,94,0.28)" : "rgba(239,68,68,0.28)", bottomColor: "rgba(0,0,0,0)", priceLineVisible: false,
-    priceFormat: { type: "custom", formatter: v => v.toFixed(2) + "x", minMove: 0.01 } });
-  coinSeries.setData(data);
+  let nBars = data.length;
+  const up = (data.at(-1)?.value ?? 1) >= 1, xfmt = { type: "custom", formatter: v => v.toFixed(2) + "x", minMove: 0.01 };
+  if (candle) {
+    coinSeries = coinChart.addCandlestickSeries({ upColor: css("--green"), downColor: css("--red"), borderUpColor: css("--green"), borderDownColor: css("--red"),
+      wickUpColor: css("--green"), wickDownColor: css("--red"), priceLineVisible: false, priceFormat: xfmt });
+    const cd = memeCandles(d, sec); coinSeries.setData(cd); nBars = cd.length;
+  } else {
+    coinSeries = coinChart.addAreaSeries({ lineColor: up ? css("--green") : css("--red"), lineWidth: 2,
+      topColor: up ? "rgba(34,197,94,0.28)" : "rgba(239,68,68,0.28)", bottomColor: "rgba(0,0,0,0)", priceLineVisible: false, priceFormat: xfmt });
+    coinSeries.setData(data);
+  }
   [[1, css("--text-2"), "BELI"], [d.rules.stop_loss, css("--red"), "SL"], [d.rules.tp1, css("--green"), "TP1"], [d.rules.tp2, css("--green"), "TP2"]]
     .filter(([price]) => price != null).forEach(([price, c, title]) => coinSeries.createPriceLine({ price, color: c, lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title }));
   coinSeries.setMarkers(d.trades.map(t => { const buy = t.side === "BELI", m = buy ? 1 : t.price_sol / d.entry;
-    return { time: Math.floor(t.ts) + TZ, position: buy ? "belowBar" : "aboveBar", shape: buy ? "arrowUp" : "arrowDown",
+    return { time: (candle ? Math.floor(t.ts / sec) * sec : Math.floor(t.ts)) + TZ, position: buy ? "belowBar" : "aboveBar", shape: buy ? "arrowUp" : "arrowDown",
       color: buy ? css("--cyan") : m >= 1 ? css("--green") : css("--red"), text: buy ? "BELI" : "JUAL " + (t.reason || "") }; }));
-  coinChart.timeScale().fitContent();
+  fitCoinChart(coinChart, el, nBars, candle);
   coinLegend(null);
 }
 function coinLegend(p) {
   if (!coinData || !coinSeries) return;
   const d = p && p.seriesData && p.seriesData.get(coinSeries), last = coinData.prices.at(-1);
-  const v = d ? d.value : last ? last[1] / coinData.entry : 1;
+  const v = d ? (d.close ?? d.value) : last ? last[1] / coinData.entry : 1;
   const mcap = coinData.sol_usd ? v * coinData.entry * 1e9 * coinData.sol_usd : null;
   document.getElementById("coin-legend").innerHTML = `<span>${d ? clock(d.time - TZ) : "TERAKHIR"}</span><span>HARGA <b class="${cls(v - 1)}">${x(v)}</b> dari harga beli</span>` +
+      (d && d.open != null ? `<span>O <b>${x(d.open)}</b> H <b>${x(d.high)}</b> L <b>${x(d.low)}</b> C <b>${x(d.close)}</b></span>` : "") +
     (mcap ? `<span>MCAP ≈ <b>$${mcap >= 1e6 ? (mcap / 1e6).toFixed(2) + "M" : mcap >= 1000 ? (mcap / 1000).toFixed(1) + "k" : mcap.toFixed(0)}</b></span>` : "") +
     `<span>${coinData.prices.length} titik harga</span>`;
 }

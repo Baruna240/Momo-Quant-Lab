@@ -274,11 +274,77 @@ def alt_summary():
                     out["ai"]["history"].append(m)
                 if not out["ai"][r["kind"]]:
                     out["ai"][r["kind"]] = m
+        out["closed"] = [dict(r) for r in conn.execute(
+            "SELECT strategy, symbol, opened, closed, entry, exit, cost, proceeds, pnl, ret, reason, side, lev, funding"
+            " FROM alt_positions ORDER BY closed DESC LIMIT 300")]
         out["budget"] = budget
         out["max_positions"] = ALT_SETTINGS.max_positions
         return out
     finally:
         conn.close()
+
+
+LAB_PAGE = BASE_DIR / "web" / "lab.html"
+
+
+def alt_coin(symbol):
+    """Semua transaksi & posisi terbuka untuk satu koin altcoin (penanda di chart candlestick)."""
+    out = {"symbol": symbol, "trades": [], "open": []}
+    if not ALT_DB.exists():
+        return out
+    conn = sqlite3.connect(f"file:{ALT_DB}?mode=ro", uri=True, timeout=5)
+    conn.row_factory = sqlite3.Row
+    try:
+        out["trades"] = [dict(r) for r in conn.execute(
+            "SELECT ts, strategy, side, dir, lev, price, usd, reason FROM alt_trades WHERE symbol=? ORDER BY ts", (symbol,))]
+        out["open"] = [dict(r) for r in conn.execute("SELECT * FROM alt_open WHERE symbol=?", (symbol,))]
+        return out
+    finally:
+        conn.close()
+ALT_ABYSS_PAGE = BASE_DIR / "web" / "alt_abyss.html"   # tema altcoin laut dalam (gurita)
+
+
+def lab_summary(conn):
+    """Data ringkas untuk Command Center (/lab): meme + altcoin + AI dalam satu panggilan."""
+    out = {"now": time.time(), "meme": {}, "alt": alt_summary()}
+    if conn is None or not has_table(conn, "positions"):
+        return out
+    m = out["meme"]
+    m["stats"] = {r["key"]: r["value"] for r in conn.execute("SELECT key, value FROM stats")}         if has_table(conn, "stats") else {}
+    active = list(VARIANTS)
+    marks = ",".join("?" * len(active))
+    m["variants"] = []
+    for name, v in VARIANTS.items():
+        n, pnl, wins = conn.execute("SELECT COUNT(*), COALESCE(SUM(pnl_usd),0), COALESCE(SUM(pnl_usd>0),0)"
+                                    " FROM positions WHERE strategy=?", (name,)).fetchone()
+        m["variants"].append({"name": name, "label": v.label, "order": v.order, "n": n, "pnl": pnl, "wins": wins})
+    n, pnl, wins = conn.execute(f"SELECT COUNT(*), COALESCE(SUM(pnl_usd),0), COALESCE(SUM(pnl_usd>0),0)"
+                                f" FROM positions WHERE strategy IN ({marks})", active).fetchone()
+    m["total"] = {"n": n, "pnl": pnl, "wins": wins}
+    # pasang-surut: PnL kumulatif varian aktif (maks ±300 titik)
+    rows = conn.execute(f"SELECT closed, pnl_usd FROM positions WHERE strategy IN ({marks}) ORDER BY closed",
+                        active).fetchall()
+    step, cum, tide = max(1, len(rows) // 300), 0.0, []
+    for k, (t, p) in enumerate(rows):
+        cum += p
+        if k % step == 0 or k == len(rows) - 1:
+            tide.append([t, round(cum, 3)])
+    m["tide"] = tide
+    m["open"] = [o for o in open_positions(conn) if o["strategy"] in VARIANTS]
+    m["feed"] = [dict(r) for r in conn.execute(
+        "SELECT t.ts, t.side, t.strategy, t.symbol, t.reason, t.usd, t.price_sol / NULLIF(b.price_sol, 0) AS mult"
+        " FROM trades t LEFT JOIN trades b ON b.side='BELI' AND b.mint=t.mint AND b.strategy=t.strategy"
+        " AND b.batch=t.batch ORDER BY t.ts DESC LIMIT 30")]
+    if has_table(conn, "token_features"):
+        cols = {r[1] for r in conn.execute("PRAGMA table_info(token_features)")}
+        v2 = "COALESCE(SUM(ver=2),0)" if "ver" in cols else "0"
+        f = conn.execute(f"SELECT COUNT(*), {v2}, COALESCE(SUM(max_mult>=2),0) FROM token_features"
+                         " WHERE finalized=1").fetchone()
+        m["learn"] = {"total": f[0], "v2": f[1], "x2": f[2]}
+        m["recent_tokens"] = [dict(r) for r in conn.execute(
+            "SELECT symbol, created, max_mult, final_mult FROM token_features WHERE finalized=1"
+            " ORDER BY created DESC LIMIT 24")]
+    return out
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -304,10 +370,18 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send(ALT_PAGE.read_bytes(), "text/html; charset=utf-8")
             if url.path == "/api/alt/summary":
                 return self.send(alt_summary())
+            if url.path == "/api/alt/coin":
+                return self.send(alt_coin(q.get("symbol", "").upper()))
+            if url.path in ("/lab", "/lab.html"):
+                return self.send(LAB_PAGE.read_bytes(), "text/html; charset=utf-8")
+            if url.path in ("/alt-abyss", "/alt_abyss.html"):
+                return self.send(ALT_ABYSS_PAGE.read_bytes(), "text/html; charset=utf-8")
             conn = db()
             try:
                 if url.path == "/api/summary":
                     return self.send(summary(conn))
+                if url.path == "/api/lab":
+                    return self.send(lab_summary(conn))
                 if url.path == "/api/positions":
                     return self.send(positions(conn, q.get("status", "closed")))
                 if url.path == "/api/coin":

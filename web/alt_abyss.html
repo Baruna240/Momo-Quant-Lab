@@ -1,0 +1,754 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Abyss Altcoin</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;700&family=JetBrains+Mono:wght@400;600;800&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
+<style>
+:root {
+  color-scheme: dark;
+  --abyss-0: #01040b; --glass: rgba(5, 22, 44, 0.55);
+  --edge: rgba(157, 123, 255, 0.18); --edge-hi: rgba(157, 123, 255, 0.6);
+  --text: #e3f1ff; --text-2: #96b3c9; --muted: #557489;
+  --cyan: #5ef2ff; --teal: #2de2c4; --violet: #9d7bff; --pink: #ff6fd8; --amber: #ffcf6b; --kelp: #4dffa8; --coral: #ff5d73;
+  --s0: #5ef2ff; --s1: #ff9a5c; --s2: #4dffa8; --s3: #9d7bff; --s4: #ffcf6b; --s5: #ff6fd8; --s6: #ff5d73; --s7: #2de2c4; --s8: #7cc4ff;
+  --mono: "JetBrains Mono", ui-monospace, Consolas, monospace;
+  --display: "Chakra Petch", "JetBrains Mono", sans-serif;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--abyss-0); color: var(--text); }
+body { font: 12px/1.45 var(--mono); min-height: 100vh; overflow-x: hidden; }
+a { color: var(--cyan); text-decoration: none; }
+#abyss { position: fixed; inset: 0; width: 100vw; height: 100vh; z-index: 0; pointer-events: none; }
+.wrap { position: relative; z-index: 1; padding: 14px 20px 28px; width: 100%; }
+
+.panel { position: relative; background: var(--glass); border: 1px solid var(--edge); border-radius: 10px; padding: 12px 14px;
+  backdrop-filter: blur(7px) saturate(130%); -webkit-backdrop-filter: blur(7px) saturate(130%);
+  box-shadow: inset 0 0 24px rgba(157,123,255,.05), 0 8px 30px rgba(0,0,0,.35); min-width: 0; }
+.panel::before, .panel::after { content: ""; position: absolute; width: 14px; height: 14px; border: 1.5px solid var(--edge-hi); pointer-events: none; }
+.panel::before { top: -1px; left: -1px; border-right: 0; border-bottom: 0; border-top-left-radius: 10px; }
+.panel::after { bottom: -1px; right: -1px; border-left: 0; border-top: 0; border-bottom-right-radius: 10px; }
+.ph { display: flex; align-items: center; gap: 8px; margin: -2px 0 10px; font: 600 10.5px var(--mono); letter-spacing: .16em;
+  text-transform: uppercase; color: var(--text-2); flex-wrap: wrap; }
+.ph .id { color: var(--violet); text-shadow: 0 0 8px rgba(157,123,255,.7); }
+.ph .agent { font-size: 9.5px; letter-spacing: .1em; padding: 1px 6px; border-radius: 3px; border: 1px solid currentColor; opacity: .85; }
+.ph .r { margin-left: auto; color: var(--muted); letter-spacing: .05em; text-transform: none; font-weight: 400; }
+
+.top { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; margin-bottom: 12px; }
+.logo { display: flex; align-items: center; gap: 12px; }
+#logo { width: 44px; height: 44px; image-rendering: pixelated; filter: drop-shadow(0 0 8px rgba(157,123,255,.8)); }
+.brand h1 { margin: 0; font: 700 24px/1 var(--display); letter-spacing: .14em;
+  background: linear-gradient(90deg, var(--violet), var(--pink) 55%, var(--cyan)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.brand div { color: var(--muted); font-size: 10px; letter-spacing: .22em; margin-top: 4px; }
+.badge { font: 700 9.5px var(--mono); letter-spacing: .14em; padding: 2px 7px; border-radius: 3px; color: #021; background: var(--amber); }
+.grow { flex: 1; }
+.pill { display: inline-flex; align-items: center; gap: 7px; padding: 4px 10px; border: 1px solid var(--edge); border-radius: 999px;
+  background: rgba(3,16,36,.6); color: var(--text-2); white-space: nowrap; font-size: 11px; }
+.pill b { color: var(--text); }
+.dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); }
+.dot.on { background: var(--kelp); box-shadow: 0 0 10px var(--kelp); animation: breathe 2.4s ease-in-out infinite; }
+.dot.off { background: var(--coral); box-shadow: 0 0 8px var(--coral); }
+@keyframes breathe { 50% { opacity: .35; transform: scale(.75); } }
+.clock { font: 700 22px var(--display); letter-spacing: .08em; color: var(--violet); text-shadow: 0 0 14px rgba(157,123,255,.5); }
+
+.grid { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 12px; }
+.s3 { grid-column: span 3; } .s4 { grid-column: span 4; } .s5 { grid-column: span 5; } .s7 { grid-column: span 7; }
+.s8 { grid-column: span 8; } .s12 { grid-column: span 12; }
+@media (max-width: 1200px) { .s3 { grid-column: span 6; } .s4, .s5, .s7, .s8 { grid-column: span 12; } }
+@media (max-width: 640px) { .s3 { grid-column: span 12; } .wrap { padding: 10px 12px 24px; } .brand h1 { font-size: 19px; } }
+
+.kpi .k { color: var(--muted); font-size: 10px; letter-spacing: .16em; text-transform: uppercase; }
+.kpi .v { font: 800 26px var(--mono); font-variant-numeric: tabular-nums; margin: 4px 0 2px; }
+.kpi .d { color: var(--text-2); font-size: 11px; }
+.pos { color: var(--kelp); } .neg { color: var(--coral); } .warn { color: var(--amber); } .mut { color: var(--muted); }
+.glow-pos { text-shadow: 0 0 14px rgba(77,255,168,.45); } .glow-neg { text-shadow: 0 0 14px rgba(255,93,115,.45); }
+
+#octo { width: 100%; height: clamp(330px, 38vh, 520px); display: block; cursor: default; }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 14px; color: var(--text-2); font-size: 10.5px; margin-top: 4px; }
+.sw { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
+
+.table-wrap { overflow: auto; scrollbar-width: thin; scrollbar-color: var(--edge) transparent; }
+table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+th { position: sticky; top: 0; background: rgba(5,20,40,.92); color: var(--muted); font-weight: 600; font-size: 10px; letter-spacing: .1em;
+  text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--edge-hi); white-space: nowrap; z-index: 1; }
+td { padding: 7px 8px; border-bottom: 1px solid rgba(157,123,255,.08); white-space: nowrap; }
+tbody tr { transition: background .3s; }
+tbody tr:hover { background: rgba(157,123,255,.08); }
+.num { text-align: right; }
+.desc { color: var(--muted); font-size: 11px; white-space: normal; min-width: 220px; max-width: 440px; }
+.tag { display: inline-block; font: 700 9.5px var(--mono); letter-spacing: .06em; padding: 1px 6px; border-radius: 3px; }
+.t-naik, .t-long { background: rgba(77,255,168,.13); color: var(--kelp); }
+.t-turun { background: rgba(255,93,115,.14); color: var(--coral); }
+.t-datar { background: rgba(150,179,201,.12); color: var(--text-2); }
+.t-watch { background: rgba(255,207,107,.15); color: var(--amber); }
+.t-short, .t-fut { background: rgba(255,111,216,.14); color: var(--pink); }
+.t-spot { background: rgba(94,242,255,.12); color: var(--cyan); }
+.hold { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 3px; }
+.bar { height: 6px; background: rgba(157,123,255,.1); border-radius: 3px; overflow: hidden; }
+.bar i { display: block; height: 100%; border-radius: 3px; }
+.chart { height: clamp(260px, 36vh, 400px); }
+.feed { max-height: 420px; overflow: auto; scrollbar-width: thin; scrollbar-color: var(--edge) transparent; }
+.ev { display: grid; grid-template-columns: 62px 58px minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 6px 2px;
+  border-bottom: 1px solid rgba(157,123,255,.08); font-size: 11px; }
+.act { font: 800 9.5px var(--mono); text-align: center; border-radius: 3px; padding: 1px 0; color: #021; }
+.ai-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+@media (max-width: 900px) { .ai-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.ai-grid .kpi { background: rgba(157,123,255,.05); border: 1px solid var(--edge); border-radius: 8px; padding: 8px 10px; }
+.note { color: var(--text-2); font-size: 11.5px; margin-top: 8px; line-height: 1.6; }
+.verdict { display: inline-block; padding: 1px 7px; border-radius: 3px; font-weight: 800; font-size: 10.5px; }
+.empty { color: var(--muted); text-align: center; padding: 24px 0; }
+.foot { color: var(--muted); font-size: 10.5px; margin-top: 12px; text-align: center; line-height: 1.6; }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+.themes { display: inline-flex; border: 1px solid var(--edge); border-radius: 999px; overflow: hidden; background: rgba(3,16,36,.6); }
+.themes span { color: var(--muted); padding: 4px 8px 4px 11px; font-size: 10px; letter-spacing: .12em; }
+.themes a { padding: 4px 11px; color: var(--text-2); font-size: 11px; }
+.themes a.on { background: linear-gradient(90deg, var(--cyan), var(--violet)); color: #041022; font-weight: 800; }
+.themes a:not(.on):hover { color: var(--text); background: rgba(255,255,255,.06); }
+/* ---------- detail lengkap altcoin ---------- */
+.ad-scope select, .ad-tf button { font: 600 11px var(--mono); color: var(--text); background: rgba(3,16,36,.85); border: 1px solid var(--edge-hi);
+  border-radius: 999px; padding: 4px 12px; outline: none; cursor: pointer; }
+.ad-tf { display: inline-flex; gap: 4px; }
+.ad-tf button[aria-pressed="true"] { background: linear-gradient(90deg, var(--violet), var(--pink)); color: #0b0620; border-color: transparent; font-weight: 800; }
+.ad-chart { height: clamp(320px, 40vh, 520px); }
+.ad-legend { display: flex; flex-wrap: wrap; gap: 4px 14px; color: var(--text-2); font-size: 10.5px; margin-bottom: 6px; min-height: 16px; }
+.ad-legend b { color: var(--text); }
+.pick tbody tr { cursor: pointer; }
+tr.sel { background: rgba(157,123,255,.14) !important; box-shadow: inset 3px 0 0 var(--violet); }
+.matrix td.cell { text-align: center; font-weight: 700; border: 2px solid rgba(2,10,24,.6); border-radius: 4px; }
+.matrix td.cell span { display: block; font-weight: 400; font-size: 9.5px; color: var(--text-2); }
+.ad-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-top: 10px; }
+.ad-stats > div { background: rgba(157,123,255,.05); border: 1px solid var(--edge); border-radius: 6px; padding: 6px 9px; }
+.ad-stats .k { color: var(--muted); font-size: 9.5px; letter-spacing: .14em; text-transform: uppercase; }
+.ad-stats .v { font: 800 15px var(--mono); }
+</style>
+</head>
+<body>
+<canvas id="abyss"></canvas>
+<div class="wrap">
+  <header class="top">
+    <div class="logo">
+      <canvas id="logo" width="16" height="16"></canvas>
+      <div class="brand"><h1>ABYSS · ALTCOIN</h1><div>TOP 30 + INCARAN · SPOT + FUTURES · PAPER TRADING</div></div>
+    </div>
+    <span class="badge">SIMULASI</span>
+    <a class="pill" href="/lab" title="Meme coin (tema Abyss, kepiting)">← MEMECOIN 🦀</a>
+    <span class="themes" title="Ganti tema tampilan (data sama)"><span>TEMA</span><a href="/alt">TERMINAL</a><a href="/alt-abyss" class="on">ABYSS</a></span>
+    <div class="grow"></div>
+    <span class="pill"><span class="dot" id="live"></span><b id="live-txt">MEMUAT</b></span>
+    <span class="pill">BTC <b id="btc">–</b></span>
+    <span class="pill">KOIN <b id="ncoins">–</b></span>
+    <span class="clock" id="clock">--:--:--</span>
+  </header>
+
+  <div class="grid">
+    <section class="panel s3 kpi" id="k1"></section>
+    <section class="panel s3 kpi" id="k2"></section>
+    <section class="panel s3 kpi" id="k3"></section>
+    <section class="panel s3 kpi" id="k4"></section>
+
+    <section class="panel s12" id="p-octo">
+      <div class="ph"><span class="id">01</span> SARANG GURITA · POSISI TERBUKA <span class="agent" style="color:var(--violet)">OCTO-05</span>
+        <span class="r" id="octo-r">setiap koin = satu posisi · lengan memegang posisi yang sedang berjalan</span></div>
+      <canvas id="octo"></canvas>
+      <div class="legend"><span><span class="sw" style="background:var(--cyan)"></span>spot</span>
+        <span><span class="sw" style="background:var(--kelp)"></span>futures LONG</span>
+        <span><span class="sw" style="background:var(--pink)"></span>futures SHORT</span>
+        <span class="mut">warna gurita = suasana posisi (teal untung · ungu impas · merah rugi) · klik guritanya</span></div>
+    </section>
+
+    <section class="panel s12">
+      <div class="ph"><span class="id">02</span> STRATEGI · LEADERBOARD <span class="r"><span id="kpi-r"></span> · live = sejak simulator jalan · backtest = uji di data historis (diulang tiap 24 jam)</span></div>
+      <div class="table-wrap" id="lb"></div>
+    </section>
+
+    <section class="panel s12">
+      <div class="ph"><span class="id">03</span> FUTURES AI · HASIL LATIHAN <span class="agent" style="color:var(--teal)">ORACLE-04</span><span class="r" id="ai-r"></span></div>
+      <div id="ai"></div>
+    </section>
+
+    <section class="panel s7">
+      <div class="ph"><span class="id">04</span> HASIL LIVE PER STRATEGI (%) <span class="r">dicatat tiap 5 menit</span></div>
+      <div class="legend" id="eq-legend" style="margin:0 0 6px"></div>
+      <div class="chart" id="eq-chart"></div>
+    </section>
+
+    <section class="panel s5">
+      <div class="ph"><span class="id">05</span> DETAIL POSISI <span class="r" id="open-r"></span></div>
+      <div class="table-wrap" id="open" style="max-height: 440px"></div>
+    </section>
+
+    <section class="panel s8">
+      <div class="ph"><span class="id">06</span> PASAR · KOIN YANG DIPANTAU <span class="r">tren 1j: harga vs EMA50/EMA200 · tren 4j: EMA21 vs EMA55</span></div>
+      <div class="table-wrap" id="market" style="max-height: 560px"></div>
+    </section>
+
+    <section class="panel s4">
+      <div class="ph"><span class="id">07</span> TRANSAKSI TERBARU</div>
+      <div class="feed" id="feed"></div>
+    </section>
+
+    <!-- ================= ALTCOIN · DETAIL LENGKAP ================= -->
+    <section class="panel s12" id="ad-head">
+      <div class="ph" style="margin-bottom:0"><span class="id">A</span> ALTCOIN · DETAIL LENGKAP
+        <span class="ad-scope" id="ad-scopes"></span>
+        <span class="r">pilih strategi untuk memfokuskan chart, riwayat & matriks · klik koin di tabel, transaksi, atau gurita untuk melihat chart-nya</span></div>
+    </section>
+
+    <section class="panel s8">
+      <div class="ph"><span class="id">A1</span> <span id="ad-coin-title">CHART KOIN</span>
+        <span class="ad-tf" id="ad-tf"><button data-tf="1h" aria-pressed="true">1 JAM</button><button data-tf="4h" aria-pressed="false">4 JAM</button><button data-tf="1d" aria-pressed="false">1 HARI</button></span>
+        <span class="r" id="ad-coin-links"></span></div>
+      <div class="ad-legend" id="ad-coin-legend">Memuat candle dari Binance…</div>
+      <div class="ad-chart" id="ad-coin-chart"></div>
+    </section>
+
+    <section class="panel s4">
+      <div class="ph"><span class="id">A2</span> MATRIKS HASIL <span class="r">PnL USD · posisi · win rate (posisi ditutup)</span></div>
+      <div class="table-wrap" id="ad-matrix"></div>
+      <div class="ad-stats" id="ad-stats"></div>
+    </section>
+
+    <section class="panel s12">
+      <div class="ph"><span class="id">A3</span> RIWAYAT POSISI DITUTUP <span class="r" id="ad-closed-r"></span></div>
+      <div class="table-wrap" id="ad-closed" style="max-height: 460px"></div>
+    </section>
+  </div>
+  <p class="foot">Semua angka berasal dari <b>simulasi tanpa uang sungguhan</b> memakai harga publik Binance, sudah dipotong fee (spot 0,1%, futures 0,05% per sisi dari nilai kontrak) dan perkiraan slippage.
+    Futures memakai harga spot Binance sebagai pendekatan, funding rate OKX tiap 8 jam, dan likuidasi isolated margin; hasil futures dihitung terhadap margin. Backtest adalah uji di masa lalu, bukan jaminan. Bukan saran investasi.</p>
+</div>
+
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+const css = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+const TZ = -new Date().getTimezoneOffset() * 60;
+const usd = v => (v < 0 ? "-$" : "$") + Math.abs(v).toFixed(2);
+const pct = (v, d = 1) => v == null ? "–" : (v >= 0 ? "+" : "") + v.toFixed(d) + "%";
+const cls = v => v == null ? "" : v > 0 ? "pos" : v < 0 ? "neg" : "";
+const px = p => p == null ? "–" : p >= 100 ? p.toLocaleString("en-US", { maximumFractionDigits: 2 }) : p >= 1 ? p.toFixed(4) : p.toPrecision(4);
+const hms = ts => new Date(ts * 1000).toLocaleTimeString("id-ID", { hour12: false });
+const dt = ts => new Date(ts * 1000).toLocaleString("id-ID", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+const ago = ts => { const m = (Date.now() / 1000 - ts) / 60; return m < 60 ? Math.round(m) + " mnt" : m < 1440 ? (m / 60).toFixed(1) + " jam" : (m / 1440).toFixed(1) + " hari"; };
+const REDUCED = matchMedia("(prefers-reduced-motion: reduce)").matches;
+const C = { cyan: css("--cyan"), teal: css("--teal"), violet: css("--violet"), pink: css("--pink"), amber: css("--amber"), kelp: css("--kelp"), coral: css("--coral"), muted: css("--muted"), text2: css("--text-2") };
+const rgba = (hex, a) => { const n = parseInt(hex.slice(1), 16); return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${a})`; };
+let S = null, STRAT = {};
+const color = name => css("--s" + ((STRAT[name] ? STRAT[name].order : 0) % 9));
+const label = name => STRAT[name] ? STRAT[name].label : name;
+
+/* ================= logo pixel: gurita ================= */
+(function logo() {
+  const px = [
+    "................", ".....666666.....", "....66666666....", "...6644666666...", "...6466666666...", "...6666666666...",
+    "...6626666266...", "...6666666666...", "....66666666....", "..6.6.6..6.6.6..", ".6..6.6..6.6..6.", ".6.6..6..6..6.6.",
+    "..6..6....6..6..", "....6......6....", "................", "................"];
+  const pal = { "6": "#9d7bff", "4": "#e3d6ff", "2": "#021022" };
+  const g = $("logo").getContext("2d");
+  px.forEach((row, y) => [...row].forEach((ch, x) => { if (pal[ch]) { g.fillStyle = pal[ch]; g.fillRect(x, y, 1, 1); } }));
+})();
+
+/* ================= latar laut dalam ================= */
+(function abyss() {
+  const cv = $("abyss"), g = cv.getContext("2d"); let W = 0, H = 0; const snow = [], rays = [], bubbles = [];
+  function resize() {
+    const dpr = Math.min(devicePixelRatio || 1, 2); W = innerWidth; H = innerHeight; cv.width = W * dpr; cv.height = H * dpr; g.setTransform(dpr, 0, 0, dpr, 0, 0);
+    snow.length = 0; const n = Math.round(Math.min(170, W * H / 9500));
+    for (let i = 0; i < n; i++) snow.push({ x: Math.random() * W, y: Math.random() * H, r: Math.random() * 1.4 + 0.3, vy: Math.random() * 0.18 + 0.04, ph: Math.random() * 6.28, a: Math.random() * 0.5 + 0.15 });
+    rays.length = 0; for (let i = 0; i < 5; i++) rays.push({ x: (i + 0.5) / 5 * W, w: 60 + Math.random() * 120, sp: 0.00015 + Math.random() * 0.0002, ph: Math.random() * 6.28 });
+  }
+  addEventListener("resize", resize); resize();
+  let last = performance.now();
+  function frame(t) {
+    const d = Math.min(64, t - last); last = t;
+    const sky = g.createLinearGradient(0, 0, 0, H); sky.addColorStop(0, "#0e1240"); sky.addColorStop(0.45, "#050a22"); sky.addColorStop(1, "#01030a");
+    g.globalCompositeOperation = "source-over"; g.fillStyle = sky; g.fillRect(0, 0, W, H); g.globalCompositeOperation = "lighter";
+    for (const r of rays) { const x = r.x + Math.sin(t * r.sp + r.ph) * 90, gr = g.createLinearGradient(0, 0, 0, H * 0.8);
+      gr.addColorStop(0, "rgba(157,123,255,0.06)"); gr.addColorStop(1, "rgba(157,123,255,0)"); g.fillStyle = gr; g.beginPath();
+      g.moveTo(x - r.w * 0.3, 0); g.lineTo(x + r.w * 0.3, 0); g.lineTo(x + r.w * 1.6, H * 0.8); g.lineTo(x - r.w * 0.6, H * 0.8); g.fill(); }
+    for (const p of snow) { p.y += p.vy * d * 0.36; p.x += Math.sin(t * 0.0006 + p.ph) * 0.12; if (p.y > H + 4) { p.y = -4; p.x = Math.random() * W; }
+      g.fillStyle = `rgba(200,210,255,${p.a * (0.6 + 0.4 * Math.sin(t * 0.002 + p.ph))})`; g.beginPath(); g.arc(p.x, p.y, p.r, 0, 6.283); g.fill(); }
+    if (Math.random() < 0.02) bubbles.push({ x: Math.random() * W, y: H + 10, r: Math.random() * 3 + 1.5, v: Math.random() * 0.5 + 0.4 });
+    for (let i = bubbles.length - 1; i >= 0; i--) { const b = bubbles[i]; b.y -= b.v * d * 0.18; b.x += Math.sin(b.y * 0.03) * 0.3;
+      if (b.y < -10) { bubbles.splice(i, 1); continue; } g.strokeStyle = "rgba(190,200,255,0.35)"; g.lineWidth = 1; g.beginPath(); g.arc(b.x, b.y, b.r, 0, 6.283); g.stroke(); }
+    if (!REDUCED) requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+})();
+
+/* ================= gurita pengelola posisi =================
+   Setiap posisi terbuka = satu koin bercahaya yang dipegang satu lengan. Lengan memakai IK (FABRIK):
+   ujungnya mengejar koin, ruasnya menyesuaikan sendiri, lalu diberi gelombang agar terasa hidup.
+   Posisi baru: koin melayang masuk dan lengan menjangkaunya. Posisi ditutup: koin dilepas (naik kalau untung,
+   tenggelam kalau rugi). Warna tubuh = rata-rata hasil posisi. Klik gurita: menyemprot tinta & melesat. */
+const OCT = { coins: new Map(), arms: [], parts: [], mouse: null, jet: 0, jetV: 0, flash: null, mood: 0, blink: 0, last: 0, first: true };
+const SEG = 24;
+for (let i = 0; i < 8; i++) OCT.arms.push({ i, pts: null, tip: null, coin: null, phase: Math.random() * 6.28, len: 0 });
+const lerp = (a, b, u) => a + (b - a) * u;
+function octPart(p) { OCT.parts.push({ age: 0, life: 1000, vx: 0, vy: 0, g: 0, r: 2, kind: "dot", ...p }); }
+
+function octSync() {
+  const now = performance.now(), live = new Set();
+  for (const o of (S.open || []).filter(o => o.strategy !== "hodl_btc")) {
+    const id = o.strategy + "|" + o.symbol; live.add(id);
+    let c = OCT.coins.get(id);
+    if (!c) { c = { id, x: null, y: null, born: now, state: "in", arm: null }; OCT.coins.set(id, c); if (!OCT.first) c.fresh = true; }
+    const fut = !!o.liq;
+    Object.assign(c, { sym: o.symbol.replace(/USDT$/, ""), ret: o.ret_pct, kind: fut ? (o.side > 0 ? "long" : "short") : "spot", lev: o.lev,
+      strat: label(o.strategy), scol: color(o.strategy) });
+  }
+  for (const [id, c] of OCT.coins) if (!live.has(id) && c.state !== "gone") {
+    c.state = "gone"; c.goneAt = now; c.vy = c.ret >= 0 ? -0.05 : 0.04;
+    const arm = OCT.arms.find(a => a.coin === id); if (arm) arm.coin = null;
+    OCT.flash = { col: c.ret >= 0 ? C.kelp : C.coral, t: 0 };
+  }
+  OCT.first = false;
+  const opens = [...OCT.coins.values()].filter(c => c.state !== "gone");
+  $("octo-r").textContent = opens.length ? `${opens.length} posisi dipegang · setiap koin = satu posisi` : "tidak ada posisi · gurita beristirahat";
+  const rets = opens.map(c => c.ret || 0);
+  OCT.mood = rets.length ? Math.max(-1, Math.min(1, rets.reduce((a, b) => a + b, 0) / rets.length / 4)) : 0;
+}
+
+function fabrik(pts, base, target, segLen) {
+  const n = pts.length - 1, total = segLen * n, d = Math.hypot(target[0] - base[0], target[1] - base[1]);
+  if (d >= total) { const ux = (target[0] - base[0]) / d, uy = (target[1] - base[1]) / d; for (let j = 0; j <= n; j++) pts[j] = [base[0] + ux * segLen * j, base[1] + uy * segLen * j]; return; }
+  for (let it = 0; it < 4; it++) {
+    pts[n] = [target[0], target[1]];
+    for (let j = n - 1; j >= 0; j--) { const dx = pts[j][0] - pts[j + 1][0], dy = pts[j][1] - pts[j + 1][1], l = Math.hypot(dx, dy) || 1; pts[j] = [pts[j + 1][0] + dx / l * segLen, pts[j + 1][1] + dy / l * segLen]; }
+    pts[0] = [base[0], base[1]];
+    for (let j = 1; j <= n; j++) { const dx = pts[j][0] - pts[j - 1][0], dy = pts[j][1] - pts[j - 1][1], l = Math.hypot(dx, dy) || 1; pts[j] = [pts[j - 1][0] + dx / l * segLen, pts[j - 1][1] + dy / l * segLen]; }
+  }
+}
+
+function moodColor(m) {   // -1 merah karang · 0 ungu · +1 teal
+  const neg = [255, 93, 115], mid = [157, 123, 255], pos = [45, 226, 196], a = m < 0 ? neg : pos, u = Math.abs(m);
+  return mid.map((v, k) => Math.round(lerp(v, a[k], u)));
+}
+
+function drawOcto(t) {
+  const cv = $("octo"), dpr = Math.min(devicePixelRatio || 1, 2), w = cv.clientWidth, h = cv.clientHeight;
+  if (cv.width !== Math.round(w * dpr) || cv.height !== Math.round(h * dpr)) { cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr); }
+  const g = cv.getContext("2d"); g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, w, h);
+  const d = REDUCED ? 16 : Math.min(100, t - (OCT.last || t)); OCT.last = t;
+  // lompatan (semprot tinta) & napas
+  OCT.jetV += (-OCT.jet * 0.00005 - OCT.jetV * 0.006) * d; OCT.jet += OCT.jetV * d;
+  const breathe = 1 + Math.sin(t * 0.0022) * 0.04, bob = Math.sin(t * 0.0013) * 5 - OCT.jet;
+  const cx = w / 2 + Math.sin(t * 0.0007) * 10, cy = h * 0.66 + bob;
+  const opens = [...OCT.coins.values()].filter(c => c.state !== "gone").sort((a, b) => a.id.localeCompare(b.id));
+  // letak koin: lengkungan di atas gurita
+  const rx = Math.min(w * 0.4, 430), ry = h * 0.4;
+  opens.forEach((c, k) => {
+    const u = opens.length === 1 ? 0.5 : k / (opens.length - 1), ang = Math.PI * (1.1 + 0.8 * u);
+    c.tx = cx + Math.cos(ang) * rx; c.ty = cy - 44 + Math.sin(ang) * ry + Math.sin(t * 0.002 + k) * 4;
+    if (c.x == null) { if (c.fresh) { c.x = w + 30; c.y = -20; } else { c.x = c.tx; c.y = c.ty; } }
+    c.x += (c.tx - c.x) * Math.min(1, d / 400); c.y += (c.ty - c.y) * Math.min(1, d / 400);
+  });
+  // pembagian lengan: koin lama tetap di lengannya, koin baru ambil lengan bebas terdekat
+  const bases = OCT.arms.map((a, i) => [cx + (i - 3.5) * 6.5 * breathe, cy + 16]);
+  for (const c of opens) {
+    if (c.arm != null && OCT.arms[c.arm].coin === c.id) continue;
+    let best = null, bd = 1e9;
+    OCT.arms.forEach((a, i) => { if (a.coin) return; const dd = Math.abs(bases[i][0] - c.tx) + Math.abs(i - 3.5) * 2; if (dd < bd) { bd = dd; best = i; } });
+    if (best != null) { c.arm = best; OCT.arms[best].coin = c.id; } else c.arm = null;
+  }
+  const restLen = Math.min(170, h * 0.55);
+  const mc = moodColor(OCT.mood), body = `rgb(${mc})`;
+  let flashA = 0; if (OCT.flash) { OCT.flash.t += d; flashA = Math.max(0, 1 - OCT.flash.t / 1200); if (flashA <= 0) OCT.flash = null; }
+  // --- lengan
+  OCT.arms.forEach((a, i) => {
+    const base = bases[i];
+    if (!a.len) a.len = restLen;
+    if (!a.pts) { a.pts = Array.from({ length: SEG + 1 }, (_, j) => [base[0], base[1] + j * a.len / SEG]); a.tip = [base[0], base[1] + a.len * 0.7]; }
+    const c = a.coin ? OCT.coins.get(a.coin) : null;
+    let goal;
+    if (c) { const ang = Math.atan2(c.y - base[1], c.x - base[0]); goal = [c.x - Math.cos(ang) * 17, c.y - Math.sin(ang) * 17]; }
+    else {   // lengan bebas: menjuntai & menggulung pelan; bergembira kalau ada koin untung dilepas
+      const spread = (i - 3.5) * 0.36, sway = Math.sin(t * 0.0016 + a.phase) * 0.35, cheer = OCT.flash && OCT.flash.col === C.kelp ? -1.2 * flashA : 0;
+      const ang = Math.PI / 2 + spread + sway + cheer * Math.sign(i - 3.5 || 1), r = restLen * (0.55 + 0.1 * Math.sin(t * 0.0011 + a.phase));
+      goal = [base[0] + Math.cos(ang) * r * 1.4, Math.min(h - 6, base[1] + Math.sin(ang) * r * 0.55)];
+      if (OCT.mouse && Math.hypot(OCT.mouse.x - base[0], OCT.mouse.y - base[1]) < restLen * 0.9 && (i === 0 || i === 7)) goal = [OCT.mouse.x, OCT.mouse.y];
+    }
+    // lengan memanjang/memendek: cukup panjang untuk koinnya, sedikit kendur supaya melengkung
+    const want = c ? Math.hypot(goal[0] - base[0], goal[1] - base[1]) * 1.12 + 18 : restLen;
+    a.len += (want - a.len) * Math.min(1, d / 350);
+    const segLen = a.len / SEG;
+    a.tip[0] += (goal[0] - a.tip[0]) * Math.min(1, d / 260); a.tip[1] += (goal[1] - a.tip[1]) * Math.min(1, d / 260);
+    fabrik(a.pts, base, a.tip, segLen);
+    // gelombang tegak lurus ruas (lebih kecil saat memegang supaya ujung tetap di koin)
+    const pts = a.pts.map((p, j) => {
+      const u = j / SEG, env = c ? Math.sin(Math.PI * u) * 0.35 : u, prev = a.pts[Math.max(0, j - 1)], next = a.pts[Math.min(SEG, j + 1)];
+      let nx = -(next[1] - prev[1]), ny = next[0] - prev[0]; const l = Math.hypot(nx, ny) || 1; nx /= l; ny /= l;
+      const off = Math.sin(t * 0.003 + a.phase + j * 0.42) * 5 * env;
+      return [p[0] + nx * off, p[1] + ny * off, nx, ny];
+    });
+    // badan lengan: kurva halus melewati titik tengah tiap ruas, makin ke ujung makin tipis
+    const mid = j => [(pts[j][0] + pts[j + 1][0]) / 2, (pts[j][1] + pts[j + 1][1]) / 2];
+    g.lineCap = "round"; g.lineJoin = "round";
+    for (const [extra, alpha] of [[2.2, 0.35], [0, 1]]) {
+      for (let j = 1; j < SEG; j++) {
+        const m0 = mid(j - 1), m1 = mid(j), u = j / SEG;
+        g.strokeStyle = extra ? `rgba(${mc.map(v => Math.min(255, v + 80))},${alpha})` : `rgba(${mc},${lerp(0.95, 0.6, u)})`;
+        g.lineWidth = lerp(15, 2.4, u) + extra;
+        g.beginPath(); g.moveTo(m0[0], m0[1]); g.quadraticCurveTo(pts[j][0], pts[j][1], m1[0], m1[1]); g.stroke();
+      }
+    }
+    // alat hisap di sisi dalam
+    for (let j = 2; j < SEG - 1; j += 2) { const p = pts[j], wdt = lerp(7.5, 1.2, j / SEG) * 0.6;
+      g.fillStyle = "rgba(255,225,245,0.55)"; g.beginPath(); g.arc(p[0] - p[2] * wdt, p[1] - p[3] * wdt, Math.max(0.8, wdt * 0.45), 0, 6.283); g.fill(); }
+  });
+  // --- tubuh (mantel)
+  g.save(); g.translate(cx, cy);
+  g.globalCompositeOperation = "lighter";
+  const halo = g.createRadialGradient(0, -20, 0, 0, -20, 90);
+  halo.addColorStop(0, `rgba(${mc},${0.25 + flashA * 0.3})`); halo.addColorStop(1, `rgba(${mc},0)`);
+  g.fillStyle = halo; g.beginPath(); g.arc(0, -20, 90, 0, 6.283); g.fill();
+  if (flashA) { const f = g.createRadialGradient(0, -20, 0, 0, -20, 70); f.addColorStop(0, rgba(OCT.flash.col, 0.4 * flashA)); f.addColorStop(1, rgba(OCT.flash.col, 0)); g.fillStyle = f; g.beginPath(); g.arc(0, -20, 70, 0, 6.283); g.fill(); }
+  g.globalCompositeOperation = "source-over";
+  const mg = g.createRadialGradient(-10, -42, 4, 0, -24, 44);
+  mg.addColorStop(0, `rgba(${mc.map(v => Math.min(255, v + 90))},1)`); mg.addColorStop(0.55, body); mg.addColorStop(1, `rgba(${mc.map(v => v * 0.45)},1)`);
+  g.fillStyle = mg; g.beginPath();
+  g.moveTo(-26 * breathe, 12); g.bezierCurveTo(-36 * breathe, -18, -26 * breathe, -64 * breathe, 0, -66 * breathe);
+  g.bezierCurveTo(26 * breathe, -64 * breathe, 36 * breathe, -18, 26 * breathe, 12); g.quadraticCurveTo(0, 22, -26 * breathe, 12); g.fill();
+  // bintik kromatofor yang berkedip
+  for (let k = 0; k < 9; k++) { const ax = Math.sin(k * 2.3) * 16, ay = -50 + (k % 3) * 12 + Math.cos(k) * 4, fl = 0.25 + 0.25 * Math.sin(t * 0.004 + k * 1.7);
+    g.fillStyle = `rgba(255,255,255,${fl})`; g.beginPath(); g.arc(ax, ay, 1.6 + (k % 2), 0, 6.283); g.fill(); }
+  // mata (pupil horizontal khas gurita) melirik koin baru / kursor
+  let lookX = 0, lookY = 0;
+  const target = OCT.mouse || opens.find(c => performance.now() - c.born < 2500 && c.fresh);
+  if (target) { const tx = target.x - cx, ty = target.y - (cy - 6), l = Math.hypot(tx, ty) || 1; lookX = tx / l * 2.4; lookY = ty / l * 1.6; }
+  else { lookX = Math.sin(t * 0.0009) * 1.6; }
+  OCT.blink = Math.max(0, OCT.blink - d); if (!OCT.blink && Math.random() < d / 4000) OCT.blink = 150;
+  const sleepy = !opens.length;
+  for (const s of [-1, 1]) {
+    const ex = s * 13, ey = -8;
+    g.fillStyle = "#fff6d8"; g.beginPath(); g.ellipse(ex, ey, 8, OCT.blink || sleepy ? 1.5 : 7.2, 0, 0, 6.283); g.fill();
+    if (!OCT.blink && !sleepy) { g.fillStyle = "#120a22"; g.beginPath(); g.ellipse(ex + lookX, ey + lookY, 4.2, 1.9, 0, 0, 6.283); g.fill();
+      g.fillStyle = "#fff"; g.beginPath(); g.arc(ex + lookX - 1.5, ey + lookY - 1.2, 0.9, 0, 6.283); g.fill(); }
+  }
+  // sifon (corong) di samping
+  g.fillStyle = `rgba(${mc.map(v => v * 0.75)},1)`; g.beginPath(); g.ellipse(27, 4, 5, 3, -0.4, 0, 6.283); g.fill();
+  g.restore();
+  if (sleepy && Math.random() < d / 1400) octPart({ kind: "text", ch: "z", color: C.text2, x: cx + 22, y: cy - 60, vx: 0.012, vy: -0.025, life: 1800, r: 12 });
+  if (Math.random() < d / 1600) octPart({ kind: "bubble", x: cx + 30, y: cy, vx: 0.01, vy: -0.04, r: 1.5 + Math.random() * 2, life: 2200 });
+  // --- koin
+  for (const c of [...OCT.coins.values()]) {
+    if (c.state === "gone") {
+      const age = performance.now() - c.goneAt; c.y += c.vy * d; c.x += Math.sin(age * 0.004) * 0.3;
+      if (age > 2600) { OCT.coins.delete(c.id); continue; }
+      if (age < 40) { for (let k = 0; k < 14; k++) octPart({ x: c.x, y: c.y, vx: (Math.random() - 0.5) * 0.2, vy: (Math.random() - 0.5) * 0.2, color: c.ret >= 0 ? "77,255,168" : "255,93,115", life: 900 });
+        octPart({ kind: "text", ch: pct(c.ret, 1), color: c.ret >= 0 ? C.kelp : C.coral, x: c.x, y: c.y - 24, vy: -0.03, life: 2200, r: 13 }); }
+      drawCoin(g, c, t, 1 - age / 2600);
+    } else drawCoin(g, c, t, 1);
+  }
+  // --- partikel
+  for (let i = OCT.parts.length - 1; i >= 0; i--) {
+    const p = OCT.parts[i]; p.age += d; p.vy += p.g * d; p.x += p.vx * d; p.y += p.vy * d; if (p.age >= p.life) { OCT.parts.splice(i, 1); continue; }
+    const a = 1 - p.age / p.life;
+    if (p.kind === "text") { g.globalAlpha = a; g.fillStyle = p.color; g.font = `800 ${p.r}px JetBrains Mono`; g.textAlign = "center"; g.fillText(p.ch, p.x, p.y); g.globalAlpha = 1; }
+    else if (p.kind === "bubble") { g.strokeStyle = `rgba(200,210,255,${a * 0.7})`; g.lineWidth = 1; g.beginPath(); g.arc(p.x, p.y, p.r, 0, 6.283); g.stroke(); }
+    else if (p.kind === "ink") { g.fillStyle = `rgba(20,8,40,${a * 0.55})`; g.beginPath(); g.arc(p.x, p.y, p.r + p.age * 0.012, 0, 6.283); g.fill(); }
+    else { g.fillStyle = `rgba(${p.color},${a})`; g.beginPath(); g.arc(p.x, p.y, p.r, 0, 6.283); g.fill(); }
+  }
+  if (!opens.length && OCT.coins.size === 0) {
+    g.fillStyle = C.muted; g.font = "11px JetBrains Mono"; g.textAlign = "center";
+    g.fillText("belum ada posisi terbuka · strategi menunggu sinyal", w / 2, 24);
+  }
+}
+
+function drawCoin(g, c, t, alpha) {
+  const col = c.kind === "long" ? C.kelp : c.kind === "short" ? C.pink : C.cyan, r = 17;
+  g.save(); g.globalAlpha = Math.max(0, alpha);
+  g.globalCompositeOperation = "lighter";
+  const halo = g.createRadialGradient(c.x, c.y, 0, c.x, c.y, r * 2.3); halo.addColorStop(0, rgba(col, 0.35)); halo.addColorStop(1, rgba(col, 0));
+  g.fillStyle = halo; g.beginPath(); g.arc(c.x, c.y, r * 2.3, 0, 6.283); g.fill();
+  g.globalCompositeOperation = "source-over";
+  const fill = g.createRadialGradient(c.x - 5, c.y - 6, 1, c.x, c.y, r);
+  fill.addColorStop(0, "rgba(255,255,255,0.35)"); fill.addColorStop(0.4, rgba(col, 0.28)); fill.addColorStop(1, "rgba(5,16,36,0.92)");
+  g.fillStyle = fill; g.beginPath(); g.arc(c.x, c.y, r, 0, 6.283); g.fill();
+  g.strokeStyle = col; g.lineWidth = 1.6; g.stroke();
+  g.strokeStyle = c.scol; g.lineWidth = 2; g.beginPath(); g.arc(c.x, c.y, r + 3.5, Math.PI * 0.62, Math.PI * 2.38); g.stroke();   // cincin = warna strategi
+  g.fillStyle = "#eaf6ff"; g.font = "800 9.5px JetBrains Mono"; g.textAlign = "center"; g.fillText(c.sym.slice(0, 5), c.x, c.y + 3.5);
+  g.fillStyle = c.ret >= 0 ? C.kelp : C.coral; g.font = "800 11px JetBrains Mono"; g.fillText(pct(c.ret, 2), c.x, c.y + r + 15);
+  g.fillStyle = C.text2; g.font = "9px JetBrains Mono";
+  g.fillText((c.kind === "spot" ? "SPOT" : (c.kind === "long" ? "LONG " : "SHORT ") + c.lev + "×") + " · " + c.strat.slice(0, 16), c.x, c.y + r + 27);
+  g.restore();
+}
+
+(() => {
+  const cv = $("octo");
+  const local = e => { const r = cv.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
+  cv.addEventListener("mousemove", e => { OCT.mouse = local(e); });
+  cv.addEventListener("mouseleave", () => { OCT.mouse = null; });
+  cv.addEventListener("click", e => {
+    const m = local(e), cx = cv.clientWidth / 2, cy = cv.clientHeight * 0.66;
+    const hitCoin = [...OCT.coins.values()].find(c => c.state !== "gone" && Math.hypot(m.x - c.x, m.y - c.y) < 20);
+    if (hitCoin) { AD.select(hitCoin.id.split("|")[1]); return; }
+    if (Math.hypot(m.x - cx, m.y - (cy - 26)) < 45) {   // semprot tinta lalu melesat
+      OCT.jetV = 0.32;
+      for (let k = 0; k < 26; k++) octPart({ kind: "ink", x: cx + (Math.random() - 0.5) * 20, y: cy + 10, vx: (Math.random() - 0.5) * 0.12, vy: 0.02 + Math.random() * 0.06, r: 4 + Math.random() * 6, life: 1800 });
+      octPart({ kind: "text", ch: "!", color: C.amber, x: cx + 30, y: cy - 70, vy: -0.03, life: 1100, r: 18 });
+    }
+  });
+})();
+
+/* ================= panel data ================= */
+function renderTop() {
+  const hb = S.stats.heartbeat, alive = hb && Date.now() / 1000 - hb < 300;
+  $("live").className = "dot " + (hb ? (alive ? "on" : "off") : "");
+  $("live-txt").textContent = !hb ? "BELUM JALAN" : alive ? "LIVE" : "BERHENTI " + ago(hb);
+  const btc = S.market.find(m => m.symbol === "BTCUSDT");
+  $("btc").textContent = btc && btc.price ? "$" + px(btc.price) : "–";
+  $("ncoins").textContent = S.market.length;
+}
+function renderKpis() {
+  const real = S.strategies.filter(s => s.name !== "hodl_btc"), hodl = S.strategies.find(s => s.name === "hodl_btc");
+  const best = [...real].sort((a, b) => b.ret_pct - a.ret_pct)[0];
+  const trades = real.reduce((t, s) => t + s.trades, 0), wins = real.reduce((t, s) => t + s.wins, 0), open = real.reduce((t, s) => t + s.open, 0);
+  const btBest = [...real].filter(s => s.backtest).sort((a, b) => b.backtest.ret_pct - a.backtest.ret_pct)[0];
+  const glow = v => v > 0 ? "pos glow-pos" : v < 0 ? "neg glow-neg" : "";
+  const k = [
+    ["Strategi terbaik (live)", best ? `<span class="${glow(best.ret_pct)}">${pct(best.ret_pct, 2)}</span>` : "–", best ? esc(best.label) : "belum ada data"],
+    ["HODL BTC (pembanding)", hodl ? `<span class="${glow(hodl.ret_pct)}">${pct(hodl.ret_pct, 2)}</span>` : "–", "strategi bagus harus mengalahkan ini"],
+    ["Trade selesai (live)", trades, trades ? `${wins} untung · win rate ${(wins / trades * 100).toFixed(0)}% · ${open} terbuka` : `${open} posisi terbuka`],
+    ["Terbaik di backtest", btBest ? `<span class="${glow(btBest.backtest.ret_pct)}">${pct(btBest.backtest.ret_pct)}</span>` : "–",
+      btBest ? `${esc(btBest.label)} · ${btBest.backtest.days.toFixed(0)} hari` : "menunggu backtest"]];
+  k.forEach(([a, b, c], i) => $("k" + (i + 1)).innerHTML = `<div class="k">${a}</div><div class="v">${b}</div><div class="d">${c}</div>`);
+  const started = Math.min(...S.strategies.map(s => s.started));
+  $("kpi-r").textContent = isFinite(started) ? `modal $${S.budget} per strategi · maks ${S.max_positions} posisi · jalan sejak ${dt(started)}` : "";
+}
+const mkt = s => s.market === "futures" ? `<span class="tag t-fut">FUT ${s.leverage}×</span>` : `<span class="tag t-spot">SPOT</span>`;
+const dirTag = o => !o.liq ? `<span class="tag t-spot">SPOT</span>` : `<span class="tag ${o.side > 0 ? "t-long" : "t-short"}">${o.side > 0 ? "LONG" : "SHORT"} ${o.lev}×</span>`;
+function renderLb() {
+  const rows = [...S.strategies].sort((a, b) => b.ret_pct - a.ret_pct);
+  $("lb").innerHTML = `<table><thead><tr><th>#</th><th>STRATEGI</th><th>PASAR</th><th>ATURAN</th><th>TF</th>
+    <th class="num">SALDO</th><th class="num">LIVE</th><th class="num">TRADE</th><th class="num">WIN</th><th class="num">MAX DD</th><th class="num">TERBUKA</th>
+    <th class="num">BACKTEST</th><th class="num">BT TRADE · WIN</th><th class="num">BT PF</th><th class="num">BT MAX DD</th></tr></thead><tbody>` +
+    rows.map((s, i) => { const b = s.backtest;
+      return `<tr><td class="mut">${i + 1}</td><td><span class="sw" style="background:${color(s.name)};box-shadow:0 0 6px ${color(s.name)}"></span><b>${esc(s.label)}</b></td>
+      <td>${mkt(s)}</td><td class="desc">${esc(s.desc)}</td><td>${s.tf === "1h" ? "1 jam" : "4 jam"}</td>
+      <td class="num">${usd(s.equity)}</td><td class="num ${cls(s.ret_pct)}"><b>${pct(s.ret_pct, 2)}</b></td>
+      <td class="num">${s.trades}</td><td class="num">${s.trades ? (s.wins / s.trades * 100).toFixed(0) + "%" : "–"}</td>
+      <td class="num ${s.max_dd < -0.05 ? "neg" : ""}">${pct(s.max_dd)}</td><td class="num">${s.open}</td>
+      <td class="num ${b ? cls(b.ret_pct) : ""}">${b ? pct(b.ret_pct) + ` <span class="mut">· ${b.days.toFixed(0)} hari</span>` : "–"}</td>
+      <td class="num">${b ? `${b.trades} · ${b.trades ? (b.wins / b.trades * 100).toFixed(0) + "%" : "–"}` : "–"}</td>
+      <td class="num ${b && b.pf != null ? (b.pf >= 1 ? "pos" : "neg") : ""}">${b && b.pf != null ? b.pf.toFixed(2) : "–"}</td>
+      <td class="num">${b ? pct(b.max_dd) : "–"}</td></tr>`; }).join("") + `</tbody></table>`;
+}
+function renderAi() {
+  const A = S.ai || {}, m = A.live, b = A.backtest, el = $("ai");
+  if (!m) { el.innerHTML = `<div class="empty">Model AI belum dilatih. Latihan berjalan otomatis saat simulator mulai.</div>`; return; }
+  $("ai-r").textContent = `dilatih ${dt(m.ts)} · diulang tiap 24 jam · ${A.history.length}× latihan tercatat`;
+  const hit = (n, h, r) => n ? `<span class="${h > 0.5 ? "pos" : "neg"}">${(h * 100).toFixed(0)}%</span> <span style="font-size:13px" class="${cls(r)}">${pct(r, 2)}</span>` : "–";
+  const sides = (m.sides || []).map(x => x > 0 ? "LONG" : "SHORT"), bt = STRAT.fut_ai && STRAT.fut_ai.backtest;
+  const verdict = sides.length ? `<span class="verdict" style="background:rgba(77,255,168,.15);color:var(--kelp)">ARAH TERBUKTI: ${sides.join(" & ")}</span>`
+    : `<span class="verdict" style="background:rgba(255,93,115,.15);color:var(--coral)">BELUM PUNYA KEUNGGULAN</span>`;
+  const k = [
+    ["Data latihan", m.samples.toLocaleString("id-ID"), `${m.coins} koin · ${m.days.toFixed(0)} hari candle 1 jam · 18 ciri`],
+    ["Akurasi (data uji)", `<span class="${cls(m.acc - m.base_acc)}">${(m.acc * 100).toFixed(1)}%</span>`, `tebak kelas terbanyak saja: ${(m.base_acc * 100).toFixed(1)}% · uji ${m.val_days.toFixed(0)} hari terakhir`],
+    ["Sinyal LONG: benar · rata²", hit(m.long_n, m.long_hit, m.long_ret), `${m.long_n} sinyal · dilihat 12 jam kemudian`],
+    ["Sinyal SHORT: benar · rata²", hit(m.short_n, m.short_hit, m.short_ret), `${m.short_n} sinyal · dilihat 12 jam kemudian`]];
+  el.innerHTML = `<div class="ai-grid">` + k.map(([a, v, c]) => `<div class="kpi"><div class="k">${a}</div><div class="v" style="font-size:20px">${v}</div><div class="d">${c}</div></div>`).join("") + `</div>
+    <div class="note">Penilaian: ${verdict} &nbsp;Arah yang boleh dipakai AI: <b>${sides.length ? sides.join(" & ") : "tidak ada (AI menunggu, tidak membuka posisi)"}</b><br>
+    AI menebak apakah 12 jam ke depan harga <b>NAIK</b>, <b>TURUN</b>, atau <b>DATAR</b> dari setiap candle 1 jam semua koin. Angka di atas diukur di 20% data terbaru yang <b>tidak ikut dipelajari</b>;
+    sebuah arah hanya boleh dipakai bila minimal 200 sinyal, benar &gt; 50% <i>dan</i> rata-ratanya &gt; 0,2%.
+    ${b ? `<br>Backtest walk-forward (belajar dari 70% data awal, trading di ${bt ? bt.days.toFixed(0) : "–"} hari sisanya): sinyal LONG benar ${b.long_n ? (b.long_hit * 100).toFixed(0) + "%" : "–"}, SHORT benar ${b.short_n ? (b.short_hit * 100).toFixed(0) + "%" : "–"}${bt ? `, hasil trading <b class="${cls(bt.ret_pct)}">${pct(bt.ret_pct)}</b>` : ""}.` : ""}</div>`;
+}
+let eqChart, eqSeries = {};
+function renderEquity() {
+  if (!window.LightweightCharts) return;
+  if (!eqChart) eqChart = LightweightCharts.createChart($("eq-chart"), {
+    autoSize: true, layout: { background: { type: "solid", color: "transparent" }, textColor: C.muted, fontFamily: "JetBrains Mono", fontSize: 11 },
+    grid: { vertLines: { color: "rgba(157,123,255,0.04)" }, horzLines: { color: "rgba(157,123,255,0.08)" } },
+    rightPriceScale: { borderColor: "rgba(157,123,255,0.25)" }, timeScale: { borderColor: "rgba(157,123,255,0.25)", timeVisible: true, secondsVisible: false },
+    crosshair: { vertLine: { color: "rgba(157,123,255,0.4)", labelBackgroundColor: "#1b1640" }, horzLine: { color: "rgba(157,123,255,0.4)", labelBackgroundColor: "#1b1640" } } });
+  const fmt = { type: "custom", formatter: v => (v >= 0 ? "+" : "") + v.toFixed(2) + "%", minMove: 0.01 };
+  S.strategies.forEach(s => {
+    const pts = (S.equity[s.name] || []).map(p => ({ time: p.time + TZ, value: p.value }));
+    if (!eqSeries[s.name]) {
+      eqSeries[s.name] = eqChart.addLineSeries({ color: color(s.name), lineWidth: 2, priceFormat: fmt, lineStyle: s.name === "hodl_btc" ? 2 : 0, priceLineVisible: false, lastValueVisible: true });
+      if (s.name === "hodl_btc") eqSeries[s.name].createPriceLine({ price: 0, color: "rgba(157,123,255,0.35)", lineWidth: 1, lineStyle: 1, axisLabelVisible: false });
+    }
+    eqSeries[s.name].setData(pts);
+  });
+  $("eq-legend").innerHTML = S.strategies.map(s => `<span><span class="sw" style="background:${color(s.name)}"></span>${esc(s.label)} <b class="${cls(s.ret_pct)}">${pct(s.ret_pct, 2)}</b></span>`).join("");
+}
+function renderOpen() {
+  const el = $("open"), rows = S.open.filter(o => o.strategy !== "hodl_btc");
+  $("open-r").textContent = `${rows.length} posisi`;
+  if (!rows.length) { el.innerHTML = `<div class="empty">Belum ada posisi. Strategi menunggu sinyal masuk<br>(dicek setiap candle 1 jam / 4 jam tertutup).</div>`; return; }
+  el.innerHTML = `<table><thead><tr><th>KOIN</th><th>ARAH</th><th>STRATEGI</th><th class="num">MASUK</th><th class="num">SEKARANG</th><th class="num">HASIL</th><th class="num">STOP</th><th class="num">LIKUIDASI</th><th class="num">UMUR</th></tr></thead><tbody>` +
+    rows.map(o => `<tr data-sym="${esc(o.symbol)}"><td><b>${esc(o.symbol.replace(/USDT$/, ""))}</b></td><td>${dirTag(o)}</td>
+      <td><span class="sw" style="background:${color(o.strategy)}"></span>${esc(label(o.strategy))}</td>
+      <td class="num">${px(o.entry)}</td><td class="num">${px(o.price)}</td><td class="num ${cls(o.ret_pct)}"><b>${pct(o.ret_pct, 2)}</b></td>
+      <td class="num mut">${px(o.stop)}</td><td class="num ${o.liq ? "neg" : "mut"}">${o.liq ? px(o.liq) : "–"}</td><td class="num mut">${ago(o.opened)}</td></tr>`).join("") + `</tbody></table>`;
+}
+function renderMarket() {
+  const trend = t => t ? `<span class="tag t-${t.toLowerCase()}">${t}</span>` : `<span class="mut">–</span>`;
+  const rsiBar = r => r == null ? "–" : `<div style="display:flex;align-items:center;gap:6px;justify-content:flex-end">
+    <span class="${r < 30 ? "pos" : r > 70 ? "neg" : ""}">${r.toFixed(0)}</span>
+    <div class="bar" style="width:60px"><i style="width:${r}%;background:${r < 30 ? C.kelp : r > 70 ? C.coral : C.violet}"></i></div></div>`;
+  $("market").innerHTML = `<table><thead><tr><th>#</th><th>KOIN</th><th class="num">HARGA</th><th class="num">24J</th>
+    <th class="num">RSI 1J</th><th>TREN 1J</th><th>TREN 4J</th><th>DIPEGANG</th></tr></thead><tbody>` +
+    S.market.map(m => `<tr data-sym="${esc(m.symbol)}"><td class="mut">${m.rank ?? "–"}</td>
+      <td><b>${esc(m.base)}</b> ${m.watch ? `<span class="tag t-watch">INCARAN</span>` : ""}</td>
+      <td class="num">${px(m.price)}</td><td class="num ${cls(m.chg24)}">${pct(m.chg24, 2)}</td>
+      <td class="num">${rsiBar(m.rsi1h)}</td><td>${trend(m.trend1h)}</td><td>${trend(m.trend4h)}</td>
+      <td>${m.held_by.filter(n => n !== "hodl_btc").map(n => `<span class="hold" title="${esc(label(n))}" style="background:${color(n)};box-shadow:0 0 6px ${color(n)}"></span>`).join("") || `<span class="mut">–</span>`}</td></tr>`).join("") +
+    `</tbody></table>`;
+}
+function renderFeed() {
+  const el = $("feed"), rows = S.feed.filter(f => f.strategy !== "hodl_btc");
+  if (!rows.length) { el.innerHTML = `<div class="empty">Belum ada transaksi.</div>`; return; }
+  el.innerHTML = rows.map(f => { const open = f.side === "BELI", good = !open && (f.ret ?? 0) >= 1, fut = (f.lev || 1) > 1;
+    const txt = open ? (!fut ? "BELI" : f.dir < 0 ? "SHORT" : "LONG") : (fut ? "TUTUP" : "JUAL") + (good ? "+" : "−");
+    const col = open ? (!fut ? C.cyan : f.dir < 0 ? C.pink : C.kelp) : good ? C.kelp : C.coral;
+    return `<div class="ev" data-sym="${esc(f.symbol)}" style="cursor:pointer"><span class="mut">${hms(f.ts)}</span><span class="act" style="background:${col}">${txt}</span>
+      <span><b>${esc(f.symbol.replace(/USDT$/, ""))}</b> <span class="mut">${esc(label(f.strategy))}</span></span>
+      <span>${open ? usd(f.usd) : `<b class="${cls((f.ret ?? 1) - 1)}">${pct(((f.ret ?? 1) - 1) * 100)}</b> <span class="mut">${esc(f.reason)}</span>`}</span></div>`; }).join("");
+}
+
+async function refresh() {
+  try {
+    const r = await fetch("/api/alt/summary", { cache: "no-store" });
+    S = await r.json();
+    STRAT = Object.fromEntries(S.strategies.map(s => [s.name, s]));
+    if (!S.strategies.length) { $("live-txt").textContent = "BELUM JALAN"; $("lb").innerHTML = `<div class="empty">Simulator altcoin belum berjalan. Jalankan <b>altcoin.bat</b> atau <b>mulai_semua.bat</b>.</div>`; return; }
+    renderTop(); renderKpis(); octSync(); renderLb(); renderAi(); renderEquity(); renderOpen(); renderMarket(); renderFeed(); AD.render();
+  } catch (e) {
+    $("live").className = "dot off"; $("live-txt").textContent = "DASHBOARD TIDAK MERESPONS";
+  }
+}
+function tick(t) { if (S) drawOcto(t); requestAnimationFrame(tick); }
+requestAnimationFrame(tick);
+setInterval(() => $("clock").textContent = new Date().toLocaleTimeString("id-ID", { hour12: false }), 1000);
+refresh(); setInterval(refresh, 10000);
+
+/* ================= ALTCOIN · DETAIL LENGKAP =================
+   Chart candlestick per koin (data publik Binance langsung dari browser) dengan garis masuk / stop / likuidasi
+   dan penanda transaksi; riwayat posisi ditutup; matriks hasil per strategi. Pemilih strategi memfokuskan semuanya. */
+const AD = (() => {
+  let scope = "all", symbol = null, tf = "1h", chart, candles, lines = [], lastKey = "";
+  const TFSEC = { "1h": 3600, "4h": 14400, "1d": 86400 };
+  const inScope = s => scope === "all" || s === scope;
+  function renderScopes() {
+    const box = $("ad-scopes");
+    if (document.activeElement && box.contains(document.activeElement)) return;
+    box.innerHTML = `<select aria-label="Pilih strategi">` + [["all", "SEMUA STRATEGI"], ...S.strategies.map(s => [s.name, s.label])]
+      .map(([v, l]) => `<option value="${esc(v)}" ${v === scope ? "selected" : ""}>${esc(l)}</option>`).join("") + `</select>`;
+    box.querySelector("select").onchange = e => { scope = e.target.value; e.target.blur(); render(); };
+  }
+  document.querySelectorAll("#ad-tf button").forEach(b => b.onclick = () => {
+    tf = b.dataset.tf; document.querySelectorAll("#ad-tf button").forEach(x => x.setAttribute("aria-pressed", x === b)); lastKey = ""; loadChart();
+  });
+  function select(sym) {
+    symbol = sym; lastKey = ""; loadChart(); markRows();
+    $("ad-coin-chart").scrollIntoView({ behavior: "smooth", block: "center" });
+  }
+  function markRows() {
+    document.querySelectorAll("tr.sel").forEach(t => t.classList.remove("sel"));
+    if (symbol) document.querySelectorAll(`tr[data-sym="${CSS.escape(symbol)}"]`).forEach(t => t.classList.add("sel"));
+  }
+  function bindClicks() {
+    document.querySelectorAll("#open tbody tr[data-sym], #market tbody tr[data-sym], #feed .ev[data-sym], #ad-closed tbody tr[data-sym]").forEach(r => {
+      r.onclick = () => select(r.dataset.sym);
+      if (r.tagName === "TR") r.parentElement.parentElement.classList.add("pick");
+    });
+  }
+  async function loadChart() {
+    if (!symbol) { const o = S.open.find(o => o.strategy !== "hodl_btc"); symbol = o ? o.symbol : "BTCUSDT"; markRows(); }
+    const key = symbol + tf + scope + JSON.stringify(S.open.filter(o => o.symbol === symbol).map(o => [o.strategy, o.stop]));
+    const base = symbol.replace(/USDT$/, ""), m = S.market.find(x => x.symbol === symbol);
+    $("ad-coin-title").innerHTML = `CHART · <b style="color:var(--text)">${esc(base)}</b> ${m && m.watch ? `<span class="tag t-watch">INCARAN</span>` : ""}`;
+    $("ad-coin-links").innerHTML = `<a href="https://www.binance.com/en/trade/${encodeURIComponent(base)}_USDT" target="_blank" rel="noopener noreferrer">binance ↗</a> · <a href="https://www.tradingview.com/chart/?symbol=BINANCE:${encodeURIComponent(symbol)}" target="_blank" rel="noopener noreferrer">tradingview ↗</a>`;
+    let kl, info;
+    try {
+      [kl, info] = await Promise.all([
+        fetch(`https://data-api.binance.vision/api/v3/klines?symbol=${encodeURIComponent(symbol)}&interval=${tf}&limit=300`).then(r => r.json()),
+        fetch(`/api/alt/coin?symbol=${encodeURIComponent(symbol)}`, { cache: "no-store" }).then(r => r.json())]);
+    } catch (e) { $("ad-coin-legend").textContent = "Gagal memuat candle dari Binance."; return; }
+    if (!Array.isArray(kl)) { $("ad-coin-legend").textContent = "Data candle tidak tersedia untuk koin ini."; return; }
+    const data = kl.map(k => ({ time: Math.floor(k[0] / 1000) + TZ, open: +k[1], high: +k[2], low: +k[3], close: +k[4] }));
+    if (!chart) {
+      chart = LightweightCharts.createChart($("ad-coin-chart"), { autoSize: true,
+        layout: { background: { type: "solid", color: "transparent" }, textColor: C.muted, fontFamily: "JetBrains Mono", fontSize: 11 },
+        grid: { vertLines: { color: "rgba(157,123,255,0.04)" }, horzLines: { color: "rgba(157,123,255,0.08)" } },
+        rightPriceScale: { borderColor: "rgba(157,123,255,0.25)" }, timeScale: { borderColor: "rgba(157,123,255,0.25)", timeVisible: true, secondsVisible: false },
+        crosshair: { vertLine: { color: "rgba(157,123,255,0.4)", labelBackgroundColor: "#1b1640" }, horzLine: { color: "rgba(157,123,255,0.4)", labelBackgroundColor: "#1b1640" } } });
+      candles = chart.addCandlestickSeries({ upColor: C.kelp, downColor: C.coral, borderUpColor: C.kelp, borderDownColor: C.coral, wickUpColor: C.kelp, wickDownColor: C.coral });
+      chart.subscribeCrosshairMove(p => legend(p));
+    }
+    candles.setData(data);
+    const step = TFSEC[tf], fmt = v => px(v);
+    candles.applyOptions({ priceFormat: { type: "custom", formatter: fmt, minMove: Math.pow(10, -Math.max(2, Math.ceil(-Math.log10(data.at(-1).close)) + 3)) } });
+    lines.forEach(l => candles.removePriceLine(l)); lines = [];
+    for (const o of info.open.filter(o => inScope(o.strategy))) {
+      const fut = o.liq > 0, nm = (STRAT[o.strategy] ? STRAT[o.strategy].label : o.strategy).slice(0, 14);
+      lines.push(candles.createPriceLine({ price: o.entry, color: color(o.strategy), lineWidth: 1, lineStyle: 0, axisLabelVisible: true, title: (fut ? (o.side > 0 ? "LONG " : "SHORT ") : "MASUK ") + nm }));
+      if (o.stop > 0) lines.push(candles.createPriceLine({ price: o.stop, color: C.coral, lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: "STOP" }));   // HODL BTC tidak punya stop
+      if (fut) lines.push(candles.createPriceLine({ price: o.liq, color: C.pink, lineWidth: 1, lineStyle: 1, axisLabelVisible: true, title: "LIKUIDASI" }));
+    }
+    const t0 = data.length ? data[0].time - TZ : 0;
+    candles.setMarkers(info.trades.filter(t => inScope(t.strategy) && t.ts >= t0).map(t => {
+      const open = t.side === "BELI", fut = (t.lev || 1) > 1, short = fut && t.dir < 0;
+      const txt = open ? (fut ? (short ? "SHORT" : "LONG") : "BELI") : (fut ? "TUTUP" : "JUAL");
+      return { time: Math.floor(t.ts / step) * step + TZ, position: (open && !short) || (!open && short) ? "belowBar" : "aboveBar",
+        shape: open ? (short ? "arrowDown" : "arrowUp") : "circle", color: open ? (short ? C.pink : fut ? C.kelp : C.cyan) : C.amber, text: txt };
+    }).sort((a, b) => a.time - b.time));
+    if (key !== lastKey) { lastKey = key; chart.timeScale().fitContent(); }
+    AD._last = data.at(-1); AD._n = info.trades.length; legend(null);
+  }
+  function legend(p) {
+    const d = p && p.seriesData && candles ? p.seriesData.get(candles) : AD._last;
+    if (!d) return;
+    const chg = (d.close / d.open - 1) * 100;
+    $("ad-coin-legend").innerHTML = `<span>${p && p.time ? dt(p.time - TZ) : "TERAKHIR"}</span><span>O <b>${px(d.open)}</b></span><span>H <b>${px(d.high)}</b></span>` +
+      `<span>L <b>${px(d.low)}</b></span><span>C <b class="${cls(chg)}">${px(d.close)}</b></span><span class="${cls(chg)}">${pct(chg, 2)}</span>` +
+      `<span class="mut">${AD._n || 0} transaksi simulasi di koin ini${scope !== "all" ? " (semua strategi)" : ""}</span>`;
+  }
+  function renderClosed() {
+    const rows = (S.closed || []).filter(r => inScope(r.strategy));
+    $("ad-closed-r").textContent = `${rows.length} posisi${scope === "all" ? "" : " · " + label(scope)}`;
+    if (!rows.length) { $("ad-closed").innerHTML = `<div class="empty">Belum ada posisi yang ditutup${scope === "all" ? "" : " untuk strategi ini"}.</div>`; return; }
+    $("ad-closed").innerHTML = `<table class="pick"><thead><tr><th>DITUTUP</th><th>KOIN</th><th>ARAH</th><th>STRATEGI</th><th class="num">MASUK</th><th class="num">KELUAR</th>
+      <th class="num">HASIL</th><th class="num">PnL</th><th class="num">FUNDING</th><th class="num">DURASI</th><th>ALASAN</th></tr></thead><tbody>` +
+      rows.map(r => { const fut = (r.lev || 1) > 1 || r.side < 0, ret = (r.ret - 1) * 100, hrs = (r.closed - r.opened) / 3600;
+        return `<tr data-sym="${esc(r.symbol)}"><td class="mut">${dt(r.closed)}</td><td><b>${esc(r.symbol.replace(/USDT$/, ""))}</b></td>
+        <td>${fut ? `<span class="tag ${r.side > 0 ? "t-long" : "t-short"}">${r.side > 0 ? "LONG" : "SHORT"} ${r.lev}×</span>` : `<span class="tag t-spot">SPOT</span>`}</td>
+        <td><span class="sw" style="background:${color(r.strategy)}"></span>${esc(label(r.strategy))}</td>
+        <td class="num">${px(r.entry)}</td><td class="num">${px(r.exit)}</td><td class="num ${cls(ret)}"><b>${pct(ret, 2)}</b></td>
+        <td class="num ${cls(r.pnl)}">${usd(r.pnl)}</td><td class="num mut">${fut && r.funding ? usd(-r.funding) : "–"}</td>
+        <td class="num mut">${hrs < 1 ? Math.round(hrs * 60) + " mnt" : hrs < 48 ? hrs.toFixed(1) + " jam" : (hrs / 24).toFixed(1) + " hari"}</td>
+        <td class="${r.reason === "LIKUIDASI" ? "neg" : "mut"}">${esc(r.reason)}</td></tr>`; }).join("") + `</tbody></table>`;
+  }
+  function renderMatrix() {
+    const now = Date.now() / 1000, W = [["1J", 3600], ["24J", 86400], ["7H", 7 * 86400], ["SEMUA", 0]];
+    const names = S.strategies.filter(s => s.name !== "hodl_btc").map(s => s.name);
+    const cell = (n, secs) => { const rs = (S.closed || []).filter(r => r.strategy === n && (!secs || r.closed >= now - secs));
+      return { n: rs.length, pnl: rs.reduce((t, r) => t + r.pnl, 0), wr: rs.length ? rs.filter(r => r.pnl > 0).length / rs.length : null }; };
+    const grid = names.map(n => ({ n, cells: W.map(([, s]) => cell(n, s)) }));
+    const max = Math.max(0.01, ...grid.flatMap(g => g.cells.map(c => Math.abs(c.pnl))));
+    $("ad-matrix").innerHTML = `<table class="matrix"><thead><tr><th>STRATEGI</th>${W.map(([l]) => `<th style="text-align:center">${l}</th>`).join("")}</tr></thead><tbody>` +
+      grid.map(g => `<tr class="${g.n === scope ? "sel" : ""}"><td title="${esc(label(g.n))}"><span class="sw" style="background:${color(g.n)}"></span>${esc(label(g.n).slice(0, 22))}</td>` +
+        g.cells.map(c => { const a = c.n ? 0.12 + 0.55 * Math.abs(c.pnl) / max : 0;
+          const bg = c.pnl > 0 ? `rgba(77,255,168,${a})` : c.pnl < 0 ? `rgba(255,93,115,${a})` : "rgba(157,123,255,0.04)";
+          return `<td class="cell" style="background:${bg}">${c.n ? usd(c.pnl) : "–"}<span>${c.n}p · ${c.wr == null ? "–" : (c.wr * 100).toFixed(0) + "%"}</span></td>`; }).join("") + `</tr>`).join("") + `</tbody></table>`;
+    const rs = (S.closed || []).filter(r => inScope(r.strategy) && r.strategy !== "hodl_btc"), wins = rs.filter(r => r.pnl > 0);
+    const gw = wins.reduce((t, r) => t + r.pnl, 0), gl = -rs.filter(r => r.pnl <= 0).reduce((t, r) => t + r.pnl, 0);
+    const liq = rs.filter(r => r.reason === "LIKUIDASI").length, fund = rs.reduce((t, r) => t + (r.funding || 0), 0);
+    const b = (k, v, c = "") => `<div><div class="k">${k}</div><div class="v ${c}">${v}</div></div>`;
+    $("ad-stats").innerHTML = b("Win rate", rs.length ? (wins.length / rs.length * 100).toFixed(0) + "%" : "–") +
+      b("Profit factor", gl > 0 ? (gw / gl).toFixed(2) : gw > 0 ? "∞" : "–", gl > 0 ? (gw / gl >= 1 ? "pos" : "neg") : "") +
+      b("Likuidasi", liq, liq ? "neg" : "") + b("Funding", fund ? usd(-fund) : "$0.00", cls(-fund));
+  }
+  function render() {
+    if (!S) return;
+    renderScopes(); renderClosed(); renderMatrix(); bindClicks(); markRows(); loadChart().catch(() => {});
+  }
+  return { render, select };
+})();
+</script>
+</body>
+</html>

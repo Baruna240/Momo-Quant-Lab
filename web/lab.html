@@ -1,0 +1,1509 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Momo Abyss</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;700&family=JetBrains+Mono:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+:root {
+  color-scheme: dark;
+  --abyss-0: #01040b; --abyss-1: #031024; --abyss-2: #062043;
+  --glass: rgba(5, 22, 44, 0.52); --glass-2: rgba(8, 32, 62, 0.62);
+  --edge: rgba(94, 242, 255, 0.16); --edge-hi: rgba(94, 242, 255, 0.55);
+  --text: #d9f6ff; --text-2: #8fb8cc; --muted: #4f7489;
+  --cyan: #5ef2ff; --teal: #2de2c4; --violet: #9d7bff; --pink: #ff6fd8; --amber: #ffcf6b;
+  --kelp: #4dffa8; --coral: #ff5d73;
+  --mono: "JetBrains Mono", ui-monospace, Consolas, monospace;
+  --display: "Chakra Petch", "JetBrains Mono", sans-serif;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--abyss-0); color: var(--text); }
+body { font: 12px/1.45 var(--mono); min-height: 100vh; overflow-x: hidden; }
+a { color: var(--cyan); text-decoration: none; }
+#abyss { position: fixed; inset: 0; width: 100vw; height: 100vh; z-index: 0; pointer-events: none; }
+.wrap { position: relative; z-index: 1; padding: 14px 20px 28px; width: 100%; }
+
+/* ---------- glass panel ---------- */
+.panel { position: relative; background: var(--glass); border: 1px solid var(--edge); border-radius: 10px;
+  padding: 12px 14px; backdrop-filter: blur(7px) saturate(130%); -webkit-backdrop-filter: blur(7px) saturate(130%);
+  box-shadow: inset 0 0 24px rgba(94, 242, 255, 0.05), 0 8px 30px rgba(0, 0, 0, 0.35); min-width: 0; }
+.panel::before, .panel::after { content: ""; position: absolute; width: 14px; height: 14px; border: 1.5px solid var(--edge-hi); pointer-events: none; }
+.panel::before { top: -1px; left: -1px; border-right: 0; border-bottom: 0; border-top-left-radius: 10px; }
+.panel::after { bottom: -1px; right: -1px; border-left: 0; border-top: 0; border-bottom-right-radius: 10px; }
+.ph { display: flex; align-items: center; gap: 8px; margin: -2px 0 10px; font: 600 10.5px var(--mono);
+  letter-spacing: .16em; text-transform: uppercase; color: var(--text-2); }
+.ph .id { color: var(--cyan); text-shadow: 0 0 8px rgba(94,242,255,.6); }
+.ph .agent { font-size: 9.5px; letter-spacing: .1em; padding: 1px 6px; border-radius: 3px; border: 1px solid currentColor; opacity: .85; }
+.ph .r { margin-left: auto; color: var(--muted); letter-spacing: .05em; text-transform: none; font-weight: 400; }
+
+/* ---------- header ---------- */
+.top { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; margin-bottom: 12px; }
+.logo { display: flex; align-items: center; gap: 12px; }
+#logo { width: 44px; height: 44px; image-rendering: pixelated; filter: drop-shadow(0 0 8px rgba(255,111,216,.7)); }
+.brand h1 { margin: 0; font: 700 24px/1 var(--display); letter-spacing: .14em;
+  background: linear-gradient(90deg, var(--cyan), var(--violet) 60%, var(--pink)); -webkit-background-clip: text; background-clip: text; color: transparent;
+  text-shadow: 0 0 22px rgba(94,242,255,.25); }
+.brand div { color: var(--muted); font-size: 10px; letter-spacing: .22em; margin-top: 4px; }
+.badge { font: 700 9.5px var(--mono); letter-spacing: .14em; padding: 2px 7px; border-radius: 3px; color: #021; background: var(--amber); }
+.grow { flex: 1; }
+.pill { display: inline-flex; align-items: center; gap: 7px; padding: 4px 10px; border: 1px solid var(--edge); border-radius: 999px;
+  background: rgba(3, 16, 36, .6); color: var(--text-2); white-space: nowrap; font-size: 11px; }
+.pill b { color: var(--text); }
+.dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); }
+.dot.on { background: var(--kelp); box-shadow: 0 0 10px var(--kelp); animation: breathe 2.4s ease-in-out infinite; }
+.dot.off { background: var(--coral); box-shadow: 0 0 8px var(--coral); }
+@keyframes breathe { 50% { opacity: .35; transform: scale(.75); } }
+.clock { font: 700 22px var(--display); letter-spacing: .08em; color: var(--cyan); text-shadow: 0 0 14px rgba(94,242,255,.45); }
+.nav a { margin-left: 4px; }
+
+/* ---------- grid ---------- */
+.grid { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 12px; }
+.s3 { grid-column: span 3; } .s4 { grid-column: span 4; } .s5 { grid-column: span 5; } .s6 { grid-column: span 6; }
+.s7 { grid-column: span 7; } .s8 { grid-column: span 8; } .s12 { grid-column: span 12; }
+@media (max-width: 1200px) { .s3 { grid-column: span 6; } .s4, .s5, .s7, .s8 { grid-column: span 12; } .s6 { grid-column: span 12; } }
+@media (max-width: 640px) { .s3 { grid-column: span 12; } .wrap { padding: 10px 12px 24px; } .brand h1 { font-size: 19px; } }
+
+/* ---------- current (pipeline) ---------- */
+.current { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 0; position: relative; }
+@media (max-width: 900px) { .current { grid-template-columns: repeat(3, minmax(0, 1fr)); row-gap: 10px; } }
+.stage { position: relative; padding: 10px 12px 10px; margin: 0 6px; border-radius: 8px; border: 1px solid transparent; transition: all .5s; }
+.stage .n { font: 700 9.5px var(--mono); letter-spacing: .18em; color: var(--muted); }
+.stage .t { font: 700 13px var(--display); letter-spacing: .14em; margin: 2px 0 4px; }
+.stage .v { font: 800 22px var(--mono); font-variant-numeric: tabular-nums; }
+.stage .d { color: var(--muted); font-size: 10.5px; min-height: 15px; }
+.stage.active { border-color: var(--edge-hi); background: rgba(94, 242, 255, .06); box-shadow: 0 0 22px rgba(94,242,255,.18), inset 0 0 18px rgba(94,242,255,.08); }
+.stage.active .n { color: var(--cyan); }
+.stage .flow { position: absolute; right: -9px; top: 50%; width: 12px; height: 2px; background: var(--edge); overflow: hidden; }
+.stage .flow i { position: absolute; inset: 0; width: 40%; background: var(--cyan); box-shadow: 0 0 6px var(--cyan); animation: flow 1.4s linear infinite; }
+@keyframes flow { from { transform: translateX(-100%); } to { transform: translateX(260%); } }
+.stage:last-child .flow { display: none; }
+.stage.hit { animation: hit 0.9s ease-out; }
+@keyframes hit { 0% { box-shadow: 0 0 0 rgba(255,207,107,0); } 25% { box-shadow: 0 0 34px rgba(255,207,107,.55), inset 0 0 22px rgba(255,207,107,.25); border-color: rgba(255,207,107,.9); } 100% { box-shadow: 0 0 22px rgba(94,242,255,.18); } }
+#current { margin-bottom: 34px; }
+#walker { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; border-radius: 10px; }
+#p-current { cursor: default; }
+
+/* ---------- kpis ---------- */
+.kpi .k { color: var(--muted); font-size: 10px; letter-spacing: .16em; text-transform: uppercase; }
+.kpi .v { font: 800 26px var(--mono); font-variant-numeric: tabular-nums; margin: 4px 0 2px; }
+.kpi .d { color: var(--text-2); font-size: 11px; }
+.pos { color: var(--kelp); } .neg { color: var(--coral); } .warn { color: var(--amber); } .mut { color: var(--muted); }
+.glow-pos { text-shadow: 0 0 14px rgba(77,255,168,.45); } .glow-neg { text-shadow: 0 0 14px rgba(255,93,115,.45); }
+.ring { display: flex; align-items: center; gap: 12px; }
+.ring svg { flex: none; }
+
+/* ---------- sonar ---------- */
+.sonar-wrap { position: relative; }
+#sonar { width: 100%; height: clamp(330px, 36vh, 520px); display: block; }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 14px; color: var(--text-2); font-size: 10.5px; margin-top: 6px; }
+.sw { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: 0; }
+
+/* ---------- reef ---------- */
+.reef { display: grid; gap: 5px; }
+.reef h4 { margin: 8px 0 2px; font: 600 9.5px var(--mono); letter-spacing: .18em; color: var(--muted); }
+.reef h4:first-child { margin-top: 0; }
+.coral { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1.6fr) 74px; gap: 8px; align-items: center; font-size: 11px; }
+.coral .nm { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text-2); }
+.coral .bar { position: relative; height: 10px; }
+.coral .bar::before { content: ""; position: absolute; left: 50%; top: -3px; bottom: -3px; width: 1px; background: var(--edge-hi); }
+.coral .bar i { position: absolute; top: 2px; height: 6px; border-radius: 3px; transition: width .8s, left .8s; animation: sway 4s ease-in-out infinite; }
+@keyframes sway { 50% { filter: brightness(1.45); } }
+.coral .val { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
+.tag { display: inline-block; font: 700 9px var(--mono); letter-spacing: .08em; padding: 1px 5px; border-radius: 3px; vertical-align: 1px; }
+.t-meme { color: var(--cyan); border: 1px solid rgba(94,242,255,.4); }
+.t-alt { color: var(--violet); border: 1px solid rgba(157,123,255,.45); }
+.t-fut { color: var(--pink); border: 1px solid rgba(255,111,216,.45); }
+
+/* ---------- stream ---------- */
+.stream { max-height: clamp(352px, 40vh, 560px); overflow: auto; scrollbar-width: thin; scrollbar-color: var(--edge) transparent; }
+.ev { display: grid; grid-template-columns: 58px 44px 54px minmax(0, 1fr) auto; gap: 8px; align-items: center;
+  padding: 5px 2px; border-bottom: 1px solid rgba(94,242,255,.07); font-size: 11px; }
+.ev.new { animation: arrive 1.6s ease-out; }
+@keyframes arrive { from { background: rgba(94,242,255,.22); } to { background: transparent; } }
+.ev .who { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.act { font: 800 9.5px var(--mono); text-align: center; border-radius: 3px; padding: 1px 0; color: #021; }
+
+/* ---------- tide / plankton / oracle ---------- */
+#tide { width: 100%; height: clamp(190px, 22vh, 320px); display: block; }
+.orbs { display: grid; grid-template-columns: repeat(8, 1fr); gap: 6px; margin-top: 4px; }
+.orb { aspect-ratio: 1; border-radius: 50%; display: grid; place-items: center; font-size: 8.5px; color: rgba(217,246,255,.75);
+  overflow: hidden; white-space: nowrap; animation: drift 5s ease-in-out infinite; }
+@keyframes drift { 50% { transform: translateY(-3px); } }
+.meter { height: 6px; background: rgba(94,242,255,.08); border-radius: 3px; overflow: hidden; margin: 5px 0 9px; }
+.meter i { display: block; height: 100%; border-radius: 3px; }
+.orc { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.orc .k { color: var(--muted); font-size: 10px; letter-spacing: .14em; text-transform: uppercase; }
+.orc .v { font: 800 20px var(--mono); }
+.verdict { display: inline-block; padding: 2px 8px; border-radius: 3px; font: 800 10px var(--mono); letter-spacing: .1em; }
+.note { color: var(--text-2); font-size: 11px; margin-top: 8px; line-height: 1.55; }
+
+/* ---------- terminal ---------- */
+.term { font-size: 11.5px; min-height: 128px; }
+.term .ln { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text-2); }
+.term .ln b { font-weight: 600; }
+.prompt { color: var(--cyan); margin-top: 6px; }
+.cursor { display: inline-block; width: 8px; height: 14px; background: var(--cyan); vertical-align: -2px; animation: blink 1s steps(2) infinite; box-shadow: 0 0 8px var(--cyan); }
+@keyframes blink { 50% { opacity: 0; } }
+.foot { color: var(--muted); font-size: 10.5px; margin-top: 12px; text-align: center; }
+.empty { color: var(--muted); text-align: center; padding: 24px 0; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}
+.themes { display: inline-flex; border: 1px solid var(--edge); border-radius: 999px; overflow: hidden; background: rgba(3,16,36,.6); }
+.themes span { color: var(--muted); padding: 4px 8px 4px 11px; font-size: 10px; letter-spacing: .12em; }
+.themes a { padding: 4px 11px; color: var(--text-2); font-size: 11px; }
+.themes a.on { background: linear-gradient(90deg, var(--cyan), var(--violet)); color: #041022; font-weight: 800; }
+.themes a:not(.on):hover { color: var(--text); background: rgba(255,255,255,.06); }
+/* ---------- meme detail (port dari tema Terminal) ---------- */
+.md-head .ph { flex-wrap: wrap; }
+.md-scope select { font: 600 11px var(--mono); color: var(--text); background: rgba(3,16,36,.85); border: 1px solid var(--edge-hi);
+  border-radius: 999px; padding: 4px 12px; letter-spacing: .04em; outline: none; box-shadow: 0 0 10px rgba(94,242,255,.15); }
+.md-scope select:focus { border-color: var(--cyan); }
+.ticker { position: relative; overflow: hidden; margin-top: 10px; border-top: 1px solid var(--edge); padding-top: 8px; mask-image: linear-gradient(90deg, transparent, #000 4%, #000 96%, transparent); }
+.ticker .track { display: inline-flex; white-space: nowrap; will-change: transform; }
+.ticker .group { display: inline-flex; }
+.ticker .it { padding: 0 6px; color: var(--text); font-size: 11px; }
+.ticker .it .lbl { color: var(--muted); }
+.ticker .sep { color: var(--cyan); opacity: .5; padding: 0 6px; }
+.md-hero-top { color: var(--text-2); font-size: 11px; }
+.md-hero-top .tag { color: var(--cyan); border: 1px solid rgba(94,242,255,.4); margin-right: 6px; }
+.md-hero { font: 800 44px/1.1 var(--mono); margin: 6px 0 10px; letter-spacing: -.01em; }
+.md-hero small { font-size: 16px; margin-left: 10px; }
+.md-hero .pos { text-shadow: 0 0 20px rgba(77,255,168,.4); } .md-hero .neg { text-shadow: 0 0 20px rgba(255,93,115,.4); }
+.md-kv { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px 12px; }
+@media (max-width: 700px) { .md-kv { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.md-kv .k, .md-gstats .k, .md-mcs .k { color: var(--muted); font-size: 9.5px; letter-spacing: .14em; text-transform: uppercase; }
+.md-kv .v { font: 700 15px var(--mono); font-variant-numeric: tabular-nums; }
+.md-meter-lbl { display: flex; justify-content: space-between; color: var(--muted); font-size: 10px; letter-spacing: .12em; }
+.md-split { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; }
+@media (max-width: 1000px) { .md-split { grid-template-columns: minmax(0, 1fr); } }
+.md-sub { min-width: 0; }
+.md-legend { display: flex; flex-wrap: wrap; gap: 4px 14px; color: var(--text-2); font-size: 10.5px; margin-bottom: 6px; min-height: 16px; }
+.md-legend b { color: var(--text); }
+.md-chart { height: clamp(260px, 32vh, 420px); }
+.md-chart.tall { height: clamp(300px, 38vh, 480px); }
+.md-gstats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin-bottom: 8px; }
+.md-gstats > div { background: rgba(94,242,255,.05); border: 1px solid var(--edge); border-radius: 6px; padding: 5px 8px; }
+.md-gstats .v { font: 700 14px var(--mono); }
+.md-table { overflow: auto; scrollbar-width: thin; scrollbar-color: var(--edge) transparent; }
+.md-table table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.md-table th { position: sticky; top: 0; z-index: 1; background: rgba(4,20,42,.95); color: var(--muted); font-weight: 600; font-size: 10px; letter-spacing: .1em;
+  text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--edge-hi); white-space: nowrap; }
+.md-table td { padding: 7px 8px; border-bottom: 1px solid rgba(94,242,255,.07); white-space: nowrap; }
+.md-table tbody tr { transition: background .3s; }
+.md-table tbody tr:hover { background: rgba(94,242,255,.07); }
+.md-table tr.cur, .md-table tr.sel { background: rgba(94,242,255,.12); box-shadow: inset 3px 0 0 var(--cyan); }
+.md-table .num { text-align: right; }
+.md-table .desc { color: var(--muted); font-size: 11px; white-space: normal; min-width: 240px; max-width: 520px; }
+.md-table .rank { color: var(--muted); }
+.md-table .lb tbody tr, .md-table .pick tbody tr { cursor: pointer; }
+.md-badge { display: inline-block; font: 800 9.5px var(--mono); letter-spacing: .06em; padding: 2px 7px; border-radius: 3px; color: #031022; }
+.md-feed { max-height: clamp(360px, 42vh, 540px); overflow: auto; scrollbar-width: thin; scrollbar-color: var(--edge) transparent; }
+.md-feed .row { display: grid; grid-template-columns: 58px 50px 20px minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 6px 2px;
+  border-bottom: 1px solid rgba(94,242,255,.07); font-size: 11px; cursor: pointer; }
+.md-feed .row:hover { background: rgba(94,242,255,.07); }
+.md-feed .side { font: 800 9.5px var(--mono); text-align: center; border-radius: 3px; padding: 1px 0; color: #031022; }
+.md-feed .st { width: 18px; height: 16px; border-radius: 3px; display: grid; place-items: center; font: 800 9px var(--mono); color: #031022; }
+.md-feed .sym { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.md-table .matrix td.cell { text-align: center; font-weight: 700; border: 2px solid rgba(2,10,24,.6); border-radius: 4px; }
+.md-table .matrix td.cell span { display: block; font-weight: 400; font-size: 9.5px; color: var(--text-2); }
+.md-mcs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-top: 8px; }
+@media (max-width: 700px) { .md-mcs { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.md-mcs .v { font: 800 16px var(--mono); }
+.md-bars { display: grid; grid-template-columns: 52px minmax(0, 1fr) 46px; gap: 7px 10px; align-items: center; font-size: 11px; }
+.md-bars .l { color: var(--text-2); text-align: right; }
+.md-bars .b { height: 10px; background: rgba(94,242,255,.07); border-radius: 5px; overflow: hidden; }
+.md-bars .b i { display: block; height: 100%; border-radius: 5px; }
+.md-bars .c { text-align: right; font-variant-numeric: tabular-nums; }
+.md-tabs { display: flex; gap: 6px; margin-bottom: 8px; flex-wrap: wrap; }
+.md-tab { font: 700 10.5px var(--mono); letter-spacing: .1em; color: var(--text-2); background: rgba(3,16,36,.6); border: 1px solid var(--edge);
+  border-radius: 999px; padding: 5px 12px; cursor: pointer; }
+.md-tab[aria-selected="true"] { color: #031022; background: linear-gradient(90deg, var(--cyan), var(--teal)); border-color: transparent; }
+.neu { color: var(--text-2); }
+.md-tf { display: inline-flex; gap: 4px; margin-left: 6px; }
+.md-tf button { white-space: nowrap; font: 600 10px var(--mono); color: var(--text); background: rgba(3,16,36,.85); border: 1px solid var(--edge-hi); border-radius: 999px; padding: 3px 10px; cursor: pointer; letter-spacing: .06em; }
+.md-tf button[aria-pressed="true"] { background: linear-gradient(90deg, var(--cyan), var(--teal)); color: #031022; border-color: transparent; font-weight: 800; }
+</style>
+</head>
+<body>
+<canvas id="abyss"></canvas>
+<div class="wrap">
+  <header class="top">
+    <div class="logo">
+      <canvas id="logo" width="16" height="16"></canvas>
+      <div class="brand"><h1>MOMO ABYSS</h1><div>COMMAND CENTER · MEME · ALTCOIN · AI</div></div>
+    </div>
+    <span class="badge">SIMULASI</span>
+    <a class="pill" href="/alt-abyss" title="Altcoin & futures (tema Abyss, gurita)">ALTCOIN 🐙 →</a>
+    <span class="themes" title="Ganti tema tampilan (data sama)"><span>TEMA</span><a href="/">TERMINAL</a><a href="/lab" class="on">ABYSS</a></span>
+    <div class="grow"></div>
+    <span class="pill"><span class="dot" id="hb-meme"></span>MEME SIM <b id="hb-meme-t">–</b></span>
+    <span class="pill"><span class="dot" id="hb-alt"></span>ALT SIM <b id="hb-alt-t">–</b></span>
+    <span class="pill">SOL <b id="sol">–</b></span>
+    <span class="pill">BTC <b id="btc">–</b></span>
+    <span class="clock" id="clock">--:--:--</span>
+  </header>
+
+  <div class="grid">
+    <section class="panel s12" id="p-current">
+      <div class="ph"><span class="id">00</span> ARUS DATA <span class="agent" style="color:var(--cyan)">SCOUT-01</span>
+        <span class="r">dari token lahir sampai AI diuji · setiap tahap menyala bergiliran</span></div>
+      <div class="current" id="current"></div>
+      <canvas id="walker"></canvas>
+    </section>
+
+    <section class="panel s3 kpi" id="k-meme"></section>
+    <section class="panel s3 kpi" id="k-alt"></section>
+    <section class="panel s3 kpi" id="k-learn"></section>
+    <section class="panel s3 kpi" id="k-ai"></section>
+
+    <section class="panel s5" id="p-sonar">
+      <div class="ph"><span class="id">01</span> SONAR POSISI <span class="agent" style="color:var(--pink)">TRADER-02</span>
+        <span class="r" id="sonar-r"></span></div>
+      <div class="sonar-wrap"><canvas id="sonar"></canvas></div>
+      <div class="legend"><span><span class="sw" style="background:var(--cyan)"></span>meme</span>
+        <span><span class="sw" style="background:var(--violet)"></span>altcoin spot</span>
+        <span><span class="sw" style="background:var(--pink)"></span>futures</span>
+        <span class="mut">jarak dari pusat = hasil · lingkar tengah = impas</span></div>
+    </section>
+
+    <section class="panel s4" id="p-reef">
+      <div class="ph"><span class="id">02</span> TERUMBU STRATEGI <span class="agent" style="color:var(--violet)">NAVIGATOR-03</span>
+        <span class="r">kanan = untung · kiri = rugi</span></div>
+      <div class="reef" id="reef"></div>
+    </section>
+
+    <section class="panel s3" id="p-stream">
+      <div class="ph"><span class="id">03</span> ALIRAN KEPUTUSAN <span class="r" id="stream-r"></span></div>
+      <div class="stream" id="stream"></div>
+    </section>
+
+    <section class="panel s5" id="p-tide">
+      <div class="ph"><span class="id">04</span> PASANG-SURUT <span class="r">PnL kumulatif varian meme yang aktif (USD)</span></div>
+      <canvas id="tide"></canvas>
+    </section>
+
+    <section class="panel s3" id="p-plankton">
+      <div class="ph"><span class="id">05</span> PLANKTON DATA <span class="r" id="plk-r"></span></div>
+      <div id="plankton"></div>
+    </section>
+
+    <section class="panel s4" id="p-oracle">
+      <div class="ph"><span class="id">06</span> ORACLE AI <span class="agent" style="color:var(--teal)">ORACLE-04</span>
+        <span class="r" id="orc-r"></span></div>
+      <div id="oracle"></div>
+    </section>
+
+    <!-- ================= MEME COIN · DETAIL LENGKAP (sama dengan tema Terminal) ================= -->
+    <section class="panel s12 md-head" id="md-head">
+      <div class="ph" style="margin-bottom:0"><span class="id">M</span> MEME COIN · DETAIL LENGKAP
+        <span class="md-scope" id="md-scopes"></span>
+        <span class="r">pilih varian untuk memfokuskan semua panel di bawah · klik koin di feed/tabel untuk melihat chart-nya</span></div>
+      <div class="ticker" id="md-ticker" title="Arahkan mouse untuk menghentikan"><div class="track" id="md-ticker-track"></div></div>
+    </section>
+
+    <section class="panel s5" id="md-hero-panel">
+      <div class="ph"><span class="id">M1</span> PnL SEPANJANG WAKTU <span class="r" id="md-hero-scope"></span></div>
+      <div class="md-hero-top" id="md-hero-sub"></div>
+      <div class="md-hero" id="md-hero">$0.00</div>
+      <div class="md-kv" id="md-kv"></div>
+      <div class="meter"><i id="md-wr-bar" style="width:0;background:linear-gradient(90deg,var(--teal),var(--kelp));box-shadow:0 0 8px var(--kelp)"></i></div>
+      <div class="md-meter-lbl"><span>WIN RATE</span><span id="md-wr-lbl">–</span></div>
+    </section>
+
+    <section class="panel s7 md-split">
+      <div class="md-sub">
+        <div class="ph"><span class="id">M2</span> <span id="md-coin-title">CHART KOIN</span> <span class="md-tf" id="md-coin-tf"><button data-m="15" aria-pressed="true">15 DTK</button><button data-m="60" aria-pressed="false">1 MNT</button><button data-m="300" aria-pressed="false">5 MNT</button><button data-m="line" aria-pressed="false">GARIS</button></span> <span class="r" id="md-coin-links"></span></div>
+        <div class="md-legend" id="md-coin-legend">Klik koin di feed atau tabel untuk melihat chart-nya.</div>
+        <div class="md-chart" id="md-coin-chart"></div>
+      </div>
+      <div class="md-sub">
+        <div class="ph"><span class="id">M2B</span> PERTUMBUHAN MODAL <span class="r" id="md-g-scope"></span></div>
+        <div class="md-gstats" id="md-g-stats"></div>
+        <div class="md-legend" id="md-g-legend"></div>
+        <div class="md-chart" id="md-g-chart"></div>
+      </div>
+    </section>
+
+    <section class="panel s12">
+      <div class="ph"><span class="id">M3</span> STRATEGY LAB · LEADERBOARD <span class="r">semua varian diuji pada koin yang sama · klik baris untuk fokus ke varian</span></div>
+      <div class="md-table" id="md-lab"></div>
+    </section>
+
+    <section class="panel s8">
+      <div class="ph"><span class="id">M4</span> KURVA EQUITY (PnL KUMULATIF, USD)</div>
+      <div class="md-legend" id="md-eq-legend"></div>
+      <div class="md-chart tall" id="md-eq-chart"></div>
+    </section>
+
+    <section class="panel s4">
+      <div class="ph"><span class="id">M5</span> LIVE FEED MEME <span class="r">40 transaksi terakhir · klik untuk chart</span></div>
+      <div class="md-feed" id="md-feed"></div>
+    </section>
+
+    <section class="panel s6">
+      <div class="ph"><span class="id">M6</span> MATRIKS HASIL <span class="r">PnL · jumlah posisi · win rate</span></div>
+      <div class="md-table" id="md-matrix"></div>
+    </section>
+
+    <section class="panel s6">
+      <div class="ph"><span class="id">M7</span> MONTE CARLO · 5.000 PUTARAN <span class="r" id="md-mc-r"></span></div>
+      <div id="md-mc"></div>
+    </section>
+
+    <section class="panel s4">
+      <div class="ph"><span class="id">M8</span> PUNCAK HARGA</div>
+      <div id="md-peaks"></div>
+      <div class="note">Setinggi apa koin sempat naik dari harga beli (belum tentu terjual di puncak).</div>
+    </section>
+
+    <section class="panel s8">
+      <div class="ph"><span class="id">M9</span> POSISI</div>
+      <div class="md-tabs">
+        <button class="md-tab" data-tab="open" aria-selected="true">SEDANG DIPEGANG</button>
+        <button class="md-tab" data-tab="closed" aria-selected="false">SUDAH DITUTUP</button>
+        <button class="md-tab" data-tab="batches" aria-selected="false">PUTARAN</button>
+      </div>
+      <div class="md-table" id="md-table" style="max-height:440px"></div>
+    </section>
+
+    <section class="panel s12 term" id="p-term">
+      <div class="ph"><span class="id">~</span> LOG DASAR LAUT <span class="r">peristiwa terbaru dari semua modul</span></div>
+      <div id="term"></div>
+      <div class="prompt">momo@abyss:~$ watch --all --paper-only <span class="cursor"></span></div>
+    </section>
+  </div>
+  <p class="foot">Semua angka berasal dari <b>simulasi tanpa uang sungguhan</b>. Bukan saran investasi.</p>
+</div>
+
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+const css = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+const usd = v => (v < 0 ? "-$" : "$") + Math.abs(v).toFixed(2);
+const pct = (v, d = 1) => v == null ? "–" : (v >= 0 ? "+" : "") + v.toFixed(d) + "%";
+const cls = v => v == null ? "" : v > 0 ? "pos" : v < 0 ? "neg" : "";
+const hms = ts => new Date(ts * 1000).toLocaleTimeString("id-ID", { hour12: false });
+const ago = ts => { const s = Date.now() / 1000 - ts; return s < 90 ? Math.round(s) + "d" : s < 5400 ? Math.round(s / 60) + "m" : (s / 3600).toFixed(1) + "j"; };
+const num = v => Math.round(v).toLocaleString("id-ID");
+const REDUCED = matchMedia("(prefers-reduced-motion: reduce)").matches;
+const C = { cyan: css("--cyan"), teal: css("--teal"), violet: css("--violet"), pink: css("--pink"), amber: css("--amber"), kelp: css("--kelp"), coral: css("--coral"), muted: css("--muted"), text2: css("--text-2") };
+const rgba = (hex, a) => { const n = parseInt(hex.slice(1), 16); return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${a})`; };
+let D = null, first = true;
+
+/* ================= pixel logo: Momo jellyfish ================= */
+(function logo() {
+  const px = [
+    "......6666......", "....66666666....", "...6644666666...", "..664466666666..", "..666666666666..",
+    ".66626666662666.", ".66666666666666.", ".66666611666666.", ".66666666666666.", "..5.5.5..5.5.5..",
+    "..5.5.5..5.5.5..", "...5.5.55.5.5...", "...5..5..5..5...", "..5...5..5...5..", "......5..5......", "................"];
+  const pal = { "6": "#ff6fd8", "4": "#ffd6f5", "2": "#021022", "1": "#ff9fe6", "5": "#5ef2ff" };
+  const g = $("logo").getContext("2d");
+  px.forEach((row, y) => [...row].forEach((ch, x) => { if (pal[ch]) { g.fillStyle = pal[ch]; g.fillRect(x, y, 1, 1); } }));
+})();
+
+/* ================= background: the abyss ================= */
+const BG = (() => {
+  const cv = $("abyss"), g = cv.getContext("2d");
+  let W = 0, H = 0, dpr = 1;
+  const snow = [], rays = [], pulses = [], bubbles = [];
+  const jellies = [
+    { key: "scout", color: C.cyan, anchor: "p-current", fx: 0.12, fy: 0.62, size: 22 },
+    { key: "trader", color: C.pink, anchor: "p-sonar", fx: 0.86, fy: 0.22, size: 26 },
+    { key: "nav", color: C.violet, anchor: "p-reef", fx: 0.88, fy: 0.75, size: 20 },
+    { key: "oracle", color: C.teal, anchor: "p-oracle", fx: 0.85, fy: 0.3, size: 24 },
+  ].map((j, k) => ({ ...j, x: 0, y: 0, ph: k * 1.7, wob: k * 2.3, act: 0.3, ready: false }));
+  const J = Object.fromEntries(jellies.map(j => [j.key, j]));
+
+  function resize() {
+    dpr = Math.min(devicePixelRatio || 1, 2);
+    W = innerWidth; H = innerHeight;
+    cv.width = W * dpr; cv.height = H * dpr;
+    g.setTransform(dpr, 0, 0, dpr, 0, 0);
+    snow.length = 0;
+    const n = Math.round(Math.min(180, W * H / 9000));
+    for (let i = 0; i < n; i++) snow.push({ x: Math.random() * W, y: Math.random() * H, r: Math.random() * 1.4 + 0.3,
+      vy: Math.random() * 0.18 + 0.04, ph: Math.random() * 6.28, a: Math.random() * 0.5 + 0.15 });
+    rays.length = 0;
+    for (let i = 0; i < 5; i++) rays.push({ x: (i + 0.5) / 5 * W + (Math.random() - 0.5) * 120, w: 60 + Math.random() * 120,
+      sp: 0.00015 + Math.random() * 0.0002, ph: Math.random() * 6.28 });
+  }
+  addEventListener("resize", resize); resize();
+
+  function anchorOf(j) {
+    const el = $(j.anchor); if (!el) return null;
+    const r = el.getBoundingClientRect();
+    return { x: r.left + r.width * j.fx, y: r.top + r.height * j.fy };
+  }
+  function rectCenter(id, fx = 0.1, fy = 0.5) {
+    const r = $(id).getBoundingClientRect();
+    return { x: r.left + r.width * fx, y: r.top + r.height * fy };
+  }
+  function pulse(fromKey, toId, color) {
+    const j = J[fromKey]; if (!j || !j.ready) return;
+    j.act = Math.min(1.6, j.act + 0.5);
+    const to = rectCenter(toId, 0.08, 0.2);
+    pulses.push({ x0: j.x, y0: j.y + j.size * 0.4, x1: to.x, y1: to.y, t: 0, color: color || j.color,
+      bend: (Math.random() - 0.5) * 260 });
+  }
+
+  function drawJelly(j, t) {
+    const s = j.size, open = Math.sin(j.ph), sq = 1 + 0.16 * open;
+    g.save(); g.translate(j.x, j.y); g.globalCompositeOperation = "lighter";
+    const halo = g.createRadialGradient(0, 0, 0, 0, 0, s * 3.4);
+    halo.addColorStop(0, rgba(j.color, 0.18 + 0.1 * j.act)); halo.addColorStop(1, rgba(j.color, 0));
+    g.fillStyle = halo; g.beginPath(); g.arc(0, 0, s * 3.4, 0, 6.283); g.fill();
+    // tentacles
+    g.lineCap = "round";
+    for (let k = 0; k < 7; k++) {
+      const x0 = (k / 6 - 0.5) * s * 1.5 / sq;
+      g.strokeStyle = rgba(j.color, k % 2 ? 0.22 : 0.38); g.lineWidth = k % 2 ? 0.8 : 1.3;
+      g.beginPath(); g.moveTo(x0, s * 0.25);
+      const len = s * (2.2 + (k % 3) * 0.5);
+      for (let y = 0; y <= len; y += 4) {
+        const sway = Math.sin(t * 0.0018 + k * 0.9 + y * 0.07 - j.ph * 0.6) * (2 + y * 0.12);
+        g.lineTo(x0 * (1 - y / len * 0.35) + sway, s * 0.25 + y);
+      }
+      g.stroke();
+    }
+    // bell
+    const bw = s / sq, bh = s * 0.82 * sq;
+    const bell = g.createRadialGradient(0, -bh * 0.35, 1, 0, 0, s * 1.2);
+    bell.addColorStop(0, "rgba(255,255,255,0.75)"); bell.addColorStop(0.35, rgba(j.color, 0.55)); bell.addColorStop(1, rgba(j.color, 0.06));
+    g.fillStyle = bell; g.beginPath(); g.moveTo(-bw, s * 0.2);
+    g.bezierCurveTo(-bw, -bh * 1.1, bw, -bh * 1.1, bw, s * 0.2);
+    for (let k = 4; k >= 0; k--) { const x = -bw + (k / 4) * bw * 2; g.quadraticCurveTo(x + bw / 4, s * 0.38, x, s * 0.2); }
+    g.fill();
+    g.strokeStyle = rgba(j.color, 0.7); g.lineWidth = 1; g.stroke();
+    // organs
+    for (let k = 0; k < 4; k++) {
+      g.fillStyle = rgba(j.color, 0.55); g.beginPath();
+      g.arc(Math.cos(k * 1.57 + j.ph * 0.3) * s * 0.28, -bh * 0.25 + Math.sin(k * 1.57 + j.ph * 0.3) * s * 0.12, 1.6 + (k % 2), 0, 6.283); g.fill();
+    }
+    g.restore();
+  }
+
+  let last = performance.now();
+  function frame(t) {
+    const dt = Math.min(64, t - last); last = t;
+    // water
+    const sky = g.createLinearGradient(0, 0, 0, H);
+    sky.addColorStop(0, "#04193a"); sky.addColorStop(0.45, "#020b1d"); sky.addColorStop(1, "#01030a");
+    g.globalCompositeOperation = "source-over"; g.fillStyle = sky; g.fillRect(0, 0, W, H);
+    g.globalCompositeOperation = "lighter";
+    // light shafts from the surface
+    for (const r of rays) {
+      const x = r.x + Math.sin(t * r.sp + r.ph) * 90;
+      const gr = g.createLinearGradient(0, 0, 0, H * 0.8);
+      gr.addColorStop(0, "rgba(94,242,255,0.055)"); gr.addColorStop(1, "rgba(94,242,255,0)");
+      g.fillStyle = gr; g.beginPath();
+      g.moveTo(x - r.w * 0.3, 0); g.lineTo(x + r.w * 0.3, 0); g.lineTo(x + r.w * 1.6, H * 0.8); g.lineTo(x - r.w * 0.6, H * 0.8); g.fill();
+    }
+    // marine snow
+    for (const p of snow) {
+      p.y += p.vy * dt * 0.06 * 6; p.x += Math.sin(t * 0.0006 + p.ph) * 0.12;
+      if (p.y > H + 4) { p.y = -4; p.x = Math.random() * W; }
+      g.fillStyle = `rgba(170,235,255,${p.a * (0.6 + 0.4 * Math.sin(t * 0.002 + p.ph))})`;
+      g.beginPath(); g.arc(p.x, p.y, p.r, 0, 6.283); g.fill();
+    }
+    // bubbles
+    if (Math.random() < 0.02) bubbles.push({ x: Math.random() * W, y: H + 10, r: Math.random() * 3 + 1.5, v: Math.random() * 0.5 + 0.4 });
+    for (let i = bubbles.length - 1; i >= 0; i--) {
+      const b = bubbles[i]; b.y -= b.v * dt * 0.06 * 3; b.x += Math.sin(b.y * 0.03) * 0.3;
+      if (b.y < -10) { bubbles.splice(i, 1); continue; }
+      g.strokeStyle = "rgba(160,240,255,0.35)"; g.lineWidth = 1; g.beginPath(); g.arc(b.x, b.y, b.r, 0, 6.283); g.stroke();
+    }
+    // jellies follow their panels
+    for (const j of jellies) {
+      const a = anchorOf(j); if (!a) continue;
+      j.wob += dt * 0.0004;
+      const tx = a.x + Math.sin(j.wob) * 26, ty = a.y + Math.cos(j.wob * 0.8) * 18 - Math.max(0, Math.sin(j.ph)) * 4;
+      if (!j.ready) { j.x = tx; j.y = ty; j.ready = true; }
+      j.x += (tx - j.x) * 0.04; j.y += (ty - j.y) * 0.04;
+      j.act = Math.max(0.3, j.act - dt * 0.00025);
+      j.ph += dt * 0.0022 * (0.6 + j.act);
+      drawJelly(j, t);
+    }
+    // light pulses travelling along currents
+    for (let i = pulses.length - 1; i >= 0; i--) {
+      const p = pulses[i]; p.t += dt / 1400;
+      if (p.t >= 1) { pulses.splice(i, 1); continue; }
+      const cx = (p.x0 + p.x1) / 2 + p.bend, cy = (p.y0 + p.y1) / 2 - 80;
+      const at = u => [(1 - u) ** 2 * p.x0 + 2 * (1 - u) * u * cx + u * u * p.x1, (1 - u) ** 2 * p.y0 + 2 * (1 - u) * u * cy + u * u * p.y1];
+      g.strokeStyle = rgba(p.color, 0.18); g.lineWidth = 1; g.beginPath();
+      for (let u = 0; u <= 1.001; u += 0.05) { const [x, y] = at(u); u === 0 ? g.moveTo(x, y) : g.lineTo(x, y); }
+      g.stroke();
+      for (let k = 0; k < 8; k++) {
+        const u = Math.max(0, p.t - k * 0.018), [x, y] = at(u);
+        g.fillStyle = rgba(p.color, 0.6 * (1 - k / 8)); g.beginPath(); g.arc(x, y, 3.2 - k * 0.3, 0, 6.283); g.fill();
+      }
+    }
+    if (!REDUCED) requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+  return { pulse, J };
+})();
+
+/* ================= data stream ================= */
+const STAGES = [
+  { n: "01", t: "INGEST", d: "token baru dari pump.fun" },
+  { n: "02", t: "FILTER", d: "spam dibuang" },
+  { n: "03", t: "OBSERVE", d: "token sedang dipelajari" },
+  { n: "04", t: "TRADE", d: "posisi terbuka (meme + alt)" },
+  { n: "05", t: "LEARN", d: "token data lengkap (v2)" },
+  { n: "06", t: "VERIFY", d: "arah AI yang lolos uji" }];
+let stageIdx = 0, activeStage = 0;
+function renderCurrent() {
+  const m = D.meme, a = D.alt, st = m.stats || {};
+  const sides = (a.ai && a.ai.live && a.ai.live.sides) || [];
+  const vals = [st.tokens_seen, st.spam_skipped, st.features_tracking, (m.open || []).length + (a.open || []).filter(o => o.strategy !== "hodl_btc").length,
+    m.learn ? m.learn.v2 : null, sides.length];
+  const box = $("current");
+  if (!box.children.length) box.innerHTML = STAGES.map((s, i) =>
+    `<div class="stage" data-i="${i}"><div class="n">${s.n} ▸</div><div class="t">${s.t}</div><div class="v" data-v="0">–</div><div class="d">${s.d}</div><span class="flow"><i></i></span></div>`).join("");
+  [...box.children].forEach((el, i) => countTo(el.querySelector(".v"), vals[i]));
+  box.children[5].querySelector(".d").textContent = sides.length ? sides.map(x => x > 0 ? "LONG" : "SHORT").join(" & ") + " lolos" : "belum ada yang lolos · AI menunggu";
+}
+// tahap berikutnya menyala setelah kepiting mengantar data & selesai berkegiatan (paling lama 15 detik)
+let stageSince = 0;
+setInterval(() => {
+  const box = $("current"); if (!box.children.length) return;
+  const now = performance.now(), done = crab.idleDone === activeStage;
+  if (stageSince && !done && now - stageSince < 15000) return;
+  stageSince = now;
+  [...box.children].forEach((el, i) => el.classList.toggle("active", i === stageIdx));
+  activeStage = stageIdx;
+  stageIdx = (stageIdx + 1) % STAGES.length;
+}, 250);
+
+function countTo(el, target) {
+  if (target == null || isNaN(target)) { el.textContent = "–"; return; }
+  const from = +el.dataset.v || 0; el.dataset.v = target;
+  if (REDUCED || from === target) { el.textContent = num(target); return; }
+  const t0 = performance.now();
+  const step = t => { const u = Math.min(1, (t - t0) / 900), e = 1 - (1 - u) ** 3;
+    el.textContent = num(from + (target - from) * e); if (u < 1) requestAnimationFrame(step); };
+  requestAnimationFrame(step);
+}
+
+/* ================= header + KPIs ================= */
+function renderTop() {
+  const m = D.meme, a = D.alt, now = Date.now() / 1000;
+  const hb = (dotId, tId, ts) => { const ok = ts && now - ts < 120;
+    $(dotId).className = "dot " + (ts ? (ok ? "on" : "off") : ""); $(tId).textContent = ts ? (ok ? "LIVE" : "OFF " + ago(ts)) : "–"; };
+  hb("hb-meme", "hb-meme-t", m.stats && m.stats.heartbeat);
+  hb("hb-alt", "hb-alt-t", a.stats && a.stats.heartbeat);
+  $("sol").textContent = m.stats && m.stats.sol_usd ? "$" + m.stats.sol_usd.toFixed(2) : "–";
+  const btc = (a.market || []).find(x => x.symbol === "BTCUSDT");
+  $("btc").textContent = btc && btc.price ? "$" + Math.round(btc.price).toLocaleString("en-US") : "–";
+}
+
+function ringSvg(frac, color) {
+  const r = 22, c = 2 * Math.PI * r, f = Math.max(0, Math.min(1, frac));
+  return `<svg width="58" height="58" viewBox="0 0 58 58"><circle cx="29" cy="29" r="${r}" fill="none" stroke="rgba(94,242,255,.1)" stroke-width="6"/>
+    <circle cx="29" cy="29" r="${r}" fill="none" stroke="${color}" stroke-width="6" stroke-linecap="round" stroke-dasharray="${c * f} ${c}"
+    transform="rotate(-90 29 29)" style="filter:drop-shadow(0 0 5px ${color})"/>
+    <text x="29" y="33" text-anchor="middle" fill="${color}" font-size="11" font-family="JetBrains Mono" font-weight="800">${Math.round(f * 100)}%</text></svg>`;
+}
+
+function renderKpis() {
+  const m = D.meme, a = D.alt, t = m.total || { n: 0, pnl: 0, wins: 0 };
+  const glow = v => v > 0 ? "pos glow-pos" : v < 0 ? "neg glow-neg" : "";
+  $("k-meme").innerHTML = `<div class="k">PnL meme · varian aktif</div><div class="v ${glow(t.pnl)}">${usd(t.pnl)}</div>
+    <div class="d">${num(t.n)} posisi · menang ${t.n ? (t.wins / t.n * 100).toFixed(1) : "–"}%</div>`;
+  const real = (a.strategies || []).filter(s => s.name !== "hodl_btc"), hodl = (a.strategies || []).find(s => s.name === "hodl_btc");
+  const best = [...real].sort((x, y) => y.ret_pct - x.ret_pct)[0];
+  $("k-alt").innerHTML = `<div class="k">Altcoin · strategi terbaik</div><div class="v ${best ? glow(best.ret_pct) : ""}">${best ? pct(best.ret_pct, 2) : "–"}</div>
+    <div class="d">${best ? esc(best.label) : "menunggu data"} · HODL BTC <span class="${hodl ? cls(hodl.ret_pct) : ""}">${hodl ? pct(hodl.ret_pct, 2) : "–"}</span></div>`;
+  const L = m.learn || { v2: 0, total: 0, x2: 0 }, goal = 5000;
+  $("k-learn").innerHTML = `<div class="k">Data belajar AI meme</div><div class="ring">${ringSvg(L.v2 / goal, C.cyan)}
+    <div><div class="v" style="font-size:22px">${num(L.v2)}</div><div class="d">token lengkap · target ${num(goal)}<br>${num(L.total)} total tercatat</div></div></div>`;
+  const ai = a.ai && a.ai.live, sides = (ai && ai.sides) || [];
+  $("k-ai").innerHTML = `<div class="k">Futures AI · status</div><div class="v ${sides.length ? "pos glow-pos" : "warn"}" style="font-size:20px">${sides.length ? "BERBURU" : "MENUNGGU"}</div>
+    <div class="d">${ai ? `arah lolos: ${sides.length ? sides.map(x => x > 0 ? "LONG" : "SHORT").join(" & ") : "tidak ada"} · akurasi ${(ai.acc * 100).toFixed(1)}%` : "model belum dilatih"}</div>`;
+}
+
+/* ================= sonar ================= */
+const sonar = { cv: $("sonar"), blips: [], angle: 0 };
+function hashAngle(s) { let h = 2166136261; for (const ch of s) { h ^= ch.charCodeAt(0); h = Math.imul(h, 16777619); } return ((h >>> 0) % 3600) / 3600 * Math.PI * 2; }
+function renderSonarData() {
+  const m = D.meme, a = D.alt, blips = [];
+  for (const o of m.open || []) if (o.mult != null) blips.push({ id: "m" + o.mint + o.strategy, sym: o.symbol, ret: o.mult - 1, color: C.cyan });
+  for (const o of a.open || []) if (o.strategy !== "hodl_btc")
+    blips.push({ id: "a" + o.symbol + o.strategy, sym: o.symbol.replace(/USDT$/, ""), ret: o.ret_pct / 100, color: o.liq ? C.pink : C.violet });
+  const old = Object.fromEntries(sonar.blips.map(b => [b.id, b]));
+  sonar.blips = blips.map(b => ({ ...b, ang: hashAngle(b.id), lit: old[b.id] ? old[b.id].lit : 0 }));
+  $("sonar-r").textContent = `${blips.length} kontak`;
+}
+function drawSonar(t) {
+  const cv = sonar.cv, dpr = Math.min(devicePixelRatio || 1, 2), w = cv.clientWidth, h = cv.clientHeight;
+  if (cv.width !== w * dpr) { cv.width = w * dpr; cv.height = h * dpr; }
+  const g = cv.getContext("2d"); g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, w, h);
+  const cx = w / 2, cy = h / 2, R = Math.min(w, h) / 2 - 14;
+  g.strokeStyle = "rgba(94,242,255,0.14)"; g.lineWidth = 1;
+  for (let k = 1; k <= 4; k++) { g.beginPath(); g.arc(cx, cy, R * k / 4, 0, 6.283); g.stroke(); }
+  g.strokeStyle = "rgba(94,242,255,0.38)"; g.setLineDash([3, 4]); g.beginPath(); g.arc(cx, cy, R * 0.5, 0, 6.283); g.stroke(); g.setLineDash([]);
+  g.beginPath(); g.moveTo(cx - R, cy); g.lineTo(cx + R, cy); g.moveTo(cx, cy - R); g.lineTo(cx, cy + R);
+  g.strokeStyle = "rgba(94,242,255,0.08)"; g.stroke();
+  g.fillStyle = C.muted; g.font = "9px JetBrains Mono"; g.textAlign = "left";
+  g.fillText("−50%", cx + 3, cy - 3); g.fillText("impas", cx + R * 0.5 + 3, cy - 3); g.fillText("+50%", cx + R - 30, cy - 3);
+  // sweep
+  sonar.angle = REDUCED ? 0 : (t * 0.0011) % 6.283;
+  const grad = g.createConicGradient ? g.createConicGradient(sonar.angle - 0.9, cx, cy) : null;
+  if (grad) {
+    grad.addColorStop(0, "rgba(94,242,255,0)"); grad.addColorStop(0.14, "rgba(94,242,255,0.22)"); grad.addColorStop(0.1433, "rgba(94,242,255,0)");
+    g.fillStyle = grad; g.beginPath(); g.moveTo(cx, cy); g.arc(cx, cy, R, sonar.angle - 0.9, sonar.angle); g.closePath(); g.fill();
+  }
+  g.strokeStyle = "rgba(94,242,255,0.75)"; g.lineWidth = 1.5; g.beginPath(); g.moveTo(cx, cy);
+  g.lineTo(cx + Math.cos(sonar.angle) * R, cy + Math.sin(sonar.angle) * R); g.stroke();
+  // blips
+  g.globalCompositeOperation = "lighter";
+  for (const b of sonar.blips) {
+    const ret = Math.max(-0.5, Math.min(0.5, b.ret)), r = R * (0.5 + ret);
+    const x = cx + Math.cos(b.ang) * r, y = cy + Math.sin(b.ang) * r;
+    let d = (sonar.angle - b.ang) % 6.283; if (d < 0) d += 6.283;
+    if (d < 0.08) b.lit = 1; b.lit = Math.max(0.25, b.lit - 0.006);
+    const halo = g.createRadialGradient(x, y, 0, x, y, 14);
+    halo.addColorStop(0, rgba(b.color, 0.55 * b.lit)); halo.addColorStop(1, rgba(b.color, 0));
+    g.fillStyle = halo; g.beginPath(); g.arc(x, y, 14, 0, 6.283); g.fill();
+    g.fillStyle = rgba(b.color, 0.5 + 0.5 * b.lit); g.beginPath(); g.arc(x, y, 3, 0, 6.283); g.fill();
+    if (b.lit > 0.4) {
+      g.fillStyle = `rgba(217,246,255,${b.lit})`; g.font = "10px JetBrains Mono"; g.textAlign = "left";
+      g.fillText(`${b.sym} ${(b.ret * 100 >= 0 ? "+" : "")}${(b.ret * 100).toFixed(1)}%`, x + 7, y - 6);
+    }
+  }
+  g.globalCompositeOperation = "source-over";
+  if (!sonar.blips.length) { g.fillStyle = C.muted; g.font = "11px JetBrains Mono"; g.textAlign = "center"; g.fillText("tidak ada kontak · semua strategi menunggu", cx, cy + R * 0.75); }
+}
+
+/* ================= reef ================= */
+function renderReef() {
+  const m = D.meme, a = D.alt;
+  const meme = (m.variants || []).filter(v => v.n).map(v => ({ label: v.label, val: v.pnl, txt: usd(v.pnl), tag: "t-meme", color: C.cyan }));
+  const alt = (a.strategies || []).map(s => ({ label: s.label, val: s.ret_pct, txt: pct(s.ret_pct, 2),
+    tag: s.market === "futures" ? "t-fut" : "t-alt", color: s.market === "futures" ? C.pink : C.violet }));
+  const block = (title, rows) => {
+    if (!rows.length) return "";
+    const max = Math.max(...rows.map(r => Math.abs(r.val)), 1e-9);
+    return `<h4>${title}</h4>` + rows.sort((x, y) => y.val - x.val).map(r => {
+      const w = Math.abs(r.val) / max * 50, pos = r.val >= 0, col = pos ? C.kelp : C.coral;
+      return `<div class="coral"><span class="nm" title="${esc(r.label)}"><span class="sw" style="background:${r.color};box-shadow:0 0 6px ${r.color}"></span>${esc(r.label)}</span>
+        <span class="bar"><i style="left:${pos ? 50 : 50 - w}%;width:${Math.max(w, 0.6)}%;background:${col};box-shadow:0 0 8px ${col}"></i></span>
+        <span class="val ${cls(r.val)}">${r.txt}</span></div>`; }).join("");
+  };
+  $("reef").innerHTML = block("MEME · PnL USD", meme) + block("ALTCOIN & FUTURES · HASIL LIVE", alt);
+}
+
+/* ================= decision stream + log ================= */
+const seenEv = new Set(), logLines = [];
+function events() {
+  const m = D.meme, a = D.alt, out = [];
+  for (const f of m.feed || []) out.push({ key: "m" + f.ts + f.strategy + f.symbol + f.side, ts: f.ts, src: "meme",
+    act: f.side === "BELI" ? "MASUK" : (f.mult ?? 0) >= 1 ? "UNTUNG" : "RUGI", sym: f.symbol, who: f.strategy,
+    res: f.side === "BELI" ? usd(f.usd || 0) : (f.mult != null ? f.mult.toFixed(2) + "×" : ""), reason: f.reason });
+  for (const f of a.feed || []) if (f.strategy !== "hodl_btc") {
+    const fut = (f.lev || 1) > 1, open = f.side === "BELI";
+    out.push({ key: "a" + f.ts + f.strategy + f.symbol + f.side, ts: f.ts, src: fut ? "fut" : "alt",
+      act: open ? (fut ? (f.dir < 0 ? "SHORT" : "LONG") : "MASUK") : (f.ret ?? 0) >= 1 ? "UNTUNG" : "RUGI",
+      sym: f.symbol.replace(/USDT$/, ""), who: f.strategy, res: open ? usd(f.usd || 0) : pct(((f.ret ?? 1) - 1) * 100), reason: f.reason });
+  }
+  return out.sort((x, y) => y.ts - x.ts).slice(0, 40);
+}
+const ACT_COL = { MASUK: () => C.cyan, LONG: () => C.kelp, SHORT: () => C.pink, UNTUNG: () => C.kelp, RUGI: () => C.coral };
+const SRC_TAG = { meme: "t-meme", alt: "t-alt", fut: "t-fut" };
+function renderStream() {
+  const evs = events(), fresh = [];
+  $("stream").innerHTML = evs.map(e => {
+    const isNew = !first && !seenEv.has(e.key);
+    if (isNew) fresh.push(e);
+    return `<div class="ev${isNew ? " new" : ""}"><span class="mut">${hms(e.ts)}</span><span class="tag ${SRC_TAG[e.src]}">${e.src.toUpperCase()}</span>
+      <span class="act" style="background:${ACT_COL[e.act]()}">${e.act}</span>
+      <span class="who"><b>${esc(e.sym)}</b> <span class="mut">${esc(e.who)}</span></span><span class="${e.act === "RUGI" ? "neg" : e.act === "UNTUNG" ? "pos" : ""}">${esc(e.res)}</span></div>`;
+  }).join("") || `<div class="empty">Belum ada keputusan.</div>`;
+  evs.forEach(e => seenEv.add(e.key));
+  $("stream-r").textContent = `${evs.length} terbaru`;
+  if (first) evs.slice(0, 6).reverse().forEach(e => log(e, true));
+  fresh.slice(0, 6).reverse().forEach(e => {
+    BG.pulse(e.src === "meme" ? "trader" : "nav", "p-stream", e.act === "RUGI" ? C.coral : e.act === "UNTUNG" ? C.kelp : null);
+    if (e.act === "UNTUNG" || e.act === "RUGI") crabReact(e.act);
+    log(e);
+  });
+}
+function log(e, quiet) {
+  const who = e.src === "meme" ? "trader" : "navigator";
+  const col = e.act === "RUGI" ? "neg" : e.act === "UNTUNG" ? "pos" : "";
+  logLines.push(`<span class="mut">[${hms(e.ts)}]</span> <b style="color:${e.src === "meme" ? C.pink : C.violet}">${who}</b> ` +
+    `<span class="${col}">${e.act.toLowerCase()}</span> <b>${esc(e.sym)}</b> · ${esc(e.who)} · ${esc(e.res)} ${e.reason ? `<span class="mut">(${esc(e.reason)})</span>` : ""}`);
+  while (logLines.length > 7) logLines.shift();
+  $("term").innerHTML = logLines.map(l => `<div class="ln">${l}</div>`).join("");
+}
+function logSys(who, color, text) {
+  logLines.push(`<span class="mut">[${hms(Date.now() / 1000)}]</span> <b style="color:${color}">${who}</b> ${text}`);
+  while (logLines.length > 7) logLines.shift();
+  $("term").innerHTML = logLines.map(l => `<div class="ln">${l}</div>`).join("");
+}
+
+/* ================= tide ================= */
+function drawTide() {
+  const cv = $("tide"), dpr = Math.min(devicePixelRatio || 1, 2), w = cv.clientWidth, h = cv.clientHeight;
+  cv.width = w * dpr; cv.height = h * dpr;
+  const g = cv.getContext("2d"); g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const pts = (D.meme.tide || []);
+  if (pts.length < 2) { g.fillStyle = C.muted; g.font = "11px JetBrains Mono"; g.fillText("belum ada posisi selesai", 10, 20); return; }
+  const t0 = pts[0][0], t1 = pts[pts.length - 1][0], vals = pts.map(p => p[1]);
+  const lo = Math.min(0, ...vals), hi = Math.max(0, ...vals), pad = 18;
+  const X = t => pad + (t - t0) / Math.max(1, t1 - t0) * (w - pad * 2 - 60), Y = v => 10 + (hi - v) / Math.max(1e-9, hi - lo) * (h - 30);
+  g.strokeStyle = "rgba(94,242,255,0.08)"; g.lineWidth = 1;
+  for (let k = 0; k <= 4; k++) { const y = 10 + k / 4 * (h - 30); g.beginPath(); g.moveTo(pad, y); g.lineTo(w - 60, y); g.stroke(); }
+  g.strokeStyle = "rgba(94,242,255,0.4)"; g.setLineDash([4, 4]); g.beginPath(); g.moveTo(pad, Y(0)); g.lineTo(w - 60, Y(0)); g.stroke(); g.setLineDash([]);
+  const end = vals[vals.length - 1], col = end >= 0 ? C.kelp : C.coral;
+  const fill = g.createLinearGradient(0, Y(hi), 0, Y(lo));
+  fill.addColorStop(0, rgba(C.cyan, 0.28)); fill.addColorStop(1, rgba(C.coral, 0.32));
+  g.beginPath(); g.moveTo(X(t0), Y(0)); pts.forEach(([t, v]) => g.lineTo(X(t), Y(v))); g.lineTo(X(t1), Y(0)); g.closePath();
+  g.fillStyle = fill; g.fill();
+  g.beginPath(); pts.forEach(([t, v], i) => i ? g.lineTo(X(t), Y(v)) : g.moveTo(X(t), Y(v)));
+  g.strokeStyle = C.cyan; g.lineWidth = 2; g.shadowColor = C.cyan; g.shadowBlur = 10; g.stroke(); g.shadowBlur = 0;
+  g.fillStyle = col; g.beginPath(); g.arc(X(t1), Y(end), 4, 0, 6.283); g.fill();
+  g.font = "700 11px JetBrains Mono"; g.textAlign = "left"; g.fillText(usd(end), X(t1) + 8, Y(end) + 4);
+  g.fillStyle = C.muted; g.font = "9px JetBrains Mono";
+  g.fillText(new Date(t0 * 1000).toLocaleString("id-ID", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }), pad, h - 4);
+  g.textAlign = "right"; g.fillText("sekarang", w - 60, h - 4);
+}
+
+/* ================= plankton ================= */
+function renderPlankton() {
+  const m = D.meme, L = m.learn || { total: 0, v2: 0, x2: 0 }, toks = m.recent_tokens || [];
+  $("plk-r").textContent = `${num(L.total)} token`;
+  const rate = L.total ? L.x2 / L.total : 0;
+  $("plankton").innerHTML = `<div class="d mut" style="font-size:10.5px">sempat naik ≥2× setelah lahir</div>
+    <div class="meter"><i style="width:${rate * 100}%;background:${C.teal};box-shadow:0 0 8px ${C.teal}"></i></div>
+    <div style="display:flex;justify-content:space-between;font-size:11px"><span>${(rate * 100).toFixed(1)}% dari semua token</span><span class="mut">${num(L.x2)} token</span></div>
+    <div class="orbs">${toks.map((t, i) => { const mx = t.max_mult || 1, sz = Math.min(1, Math.log(mx + 1) / Math.log(6));
+      const col = mx >= 2 ? C.kelp : (t.final_mult || 1) < 0.6 ? C.coral : C.cyan;
+      return `<div class="orb" title="${esc(t.symbol)} · puncak ${mx.toFixed(2)}×" style="animation-delay:${(i % 8) * -0.6}s;
+        background:radial-gradient(circle at 35% 30%, ${rgba(col, 0.75)}, ${rgba(col, 0.08)} ${40 + sz * 40}%, transparent 72%);
+        box-shadow:0 0 ${4 + sz * 12}px ${rgba(col, 0.35 + sz * 0.3)}">${esc((t.symbol || "").slice(0, 5))}</div>`; }).join("")}</div>
+    <div class="note">Setiap bola = token yang baru selesai dipelajari. Hijau = sempat ≥2×, merah = berakhir jatuh, besar = puncak lebih tinggi.</div>`;
+}
+
+/* ================= oracle ================= */
+let lastAiTs = null;
+function renderOracle() {
+  const A = D.alt.ai || {}, m = A.live, L = D.meme.learn || { v2: 0 };
+  if (!m) { $("oracle").innerHTML = `<div class="empty">Model futures belum dilatih.</div>`; return; }
+  if (lastAiTs && m.ts !== lastAiTs) { BG.pulse("oracle", "p-oracle", C.teal); logSys("oracle", C.teal, "model futures dilatih ulang"); }
+  lastAiTs = m.ts;
+  $("orc-r").textContent = `dilatih ${new Date(m.ts * 1000).toLocaleString("id-ID", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}`;
+  const sides = m.sides || [], lift = (m.acc - m.base_acc) * 100;
+  const side = (k, word, color) => m[k + "_n"] ? `<div><div class="k">${word} · ${m[k + "_n"]} sinyal</div>
+      <div class="v"><span class="${m[k + "_hit"] > 0.5 ? "pos" : "neg"}">${(m[k + "_hit"] * 100).toFixed(0)}%</span> <span style="font-size:13px" class="${cls(m[k + "_ret"])}">${pct(m[k + "_ret"], 2)}</span></div>
+      <div class="meter"><i style="width:${m[k + "_hit"] * 100}%;background:${color};box-shadow:0 0 8px ${color}"></i></div></div>` : `<div><div class="k">${word}</div><div class="v mut">–</div></div>`;
+  $("oracle").innerHTML = `<div class="orc">
+      <div><div class="k">Akurasi data uji</div><div class="v ${cls(lift)}">${(m.acc * 100).toFixed(1)}%</div>
+        <div class="mut" style="font-size:10.5px">tebak kelas terbanyak: ${(m.base_acc * 100).toFixed(1)}%</div></div>
+      <div><div class="k">Data latih</div><div class="v">${num(m.samples)}</div><div class="mut" style="font-size:10.5px">${m.coins} koin · ${m.days.toFixed(0)} hari</div></div>
+      ${side("long", "LONG benar", C.kelp)}${side("short", "SHORT benar", C.pink)}</div>
+    <div class="note"><span class="verdict" style="background:${sides.length ? "rgba(77,255,168,.15)" : "rgba(255,207,107,.14)"};color:${sides.length ? C.kelp : C.amber}">
+      ${sides.length ? "ARAH TERBUKTI: " + sides.map(x => x > 0 ? "LONG" : "SHORT").join(" & ") : "BELUM ADA ARAH TERBUKTI"}</span>
+      AI futures hanya boleh membuka posisi ke arah yang lolos uji (≥200 sinyal, benar &gt;50%, rata-rata &gt; biaya).
+      AI meme punya ${num(L.v2)} token data lengkap untuk latihan berikutnya.</div>`;
+}
+
+/* ================= loop ================= */
+let lastLearn = null;
+async function refresh() {
+  try {
+    const r = await fetch("/api/lab", { cache: "no-store" });
+    D = await r.json();
+    if (!D.meme) return;
+    renderTop(); renderCurrent(); renderKpis(); renderSonarData(); renderReef(); renderStream(); drawTide(); renderPlankton(); renderOracle();
+    const v2 = D.meme.learn ? D.meme.learn.v2 : null;
+    if (lastLearn != null && v2 > lastLearn) { BG.pulse("scout", "p-plankton", C.cyan); logSys("scout", C.cyan, `+${v2 - lastLearn} token selesai dipelajari`); }
+    lastLearn = v2;
+    first = false;
+  } catch (e) {
+    $("hb-meme").className = "dot off"; $("hb-meme-t").textContent = "DASHBOARD MATI";
+  }
+}
+/* ================= kepiting pengantar data (tampak atas, kaki ber-IK) =================
+   Kepiting merayap bebas di atas kartu tahap. 8 kaki bersendi menapak di tempat dan baru melangkah
+   (bergantian) kalau badan sudah terlalu jauh, seperti makhluk sungguhan. Di setiap tahap ia "memindai"
+   lalu mengambil data, dan selama berjalan ia menarik benang data bercahaya dari tahap sebelumnya;
+   benang-benang itu tertinggal sebentar membentuk jaringan. Saat menunggu ia berkegiatan: melambai,
+   menggali mutiara, celingukan, menari berputar, meniup gelembung, mengucek mata, menjelajah, atau tidur. */
+const crab = { x: null, y: null, a: -Math.PI / 2, v: 0, state: "walk", st: 0, dur: 0, cycles: 0, legs: [], parts: [], prints: [],
+  threads: [], cur: null, mouse: null, react: null, arrived: -1, idleDone: -1, blink: 0, pearl: 0, flash: 0, pulse: 1, tuck: 0,
+  claw: { l: 0, r: 0, lo: 0.3, ro: 0.3 }, eyes: "open", look: [0, 0], picked: false, home: null, wp: null };
+const IDLE = ["wave", "dig", "look", "dance", "bubbles", "clean", "explore", "explore"];
+const lerp = (a, b, u) => a + (b - a) * u;
+const angDiff = (a, b) => { let d = (a - b) % 6.2832; if (d > Math.PI) d -= 6.2832; if (d < -Math.PI) d += 6.2832; return d; };
+const L1 = 15, L2 = 18;
+for (const side of [-1, 1]) for (let k = 0; k < 4; k++)
+  crab.legs.push({ side, k, hip: [5 - k * 3.6, side * 8], rest: [19 - k * 12.5, side * (26 + (k === 1 || k === 2 ? 5 : 0))],
+    foot: null, from: null, to: null, t: 1, lift: 0, group: (k + (side > 0 ? 1 : 0)) % 2 });
+function toW(lx, ly) { const c = Math.cos(crab.a), s = Math.sin(crab.a); return [crab.x + lx * c - ly * s, crab.y + lx * s + ly * c]; }
+function crabState(s, dur) { crab.state = s; crab.st = 0; crab.dur = dur || 0; crab.picked = false; crab.wp = null; }
+function crabPart(p) { crab.parts.push({ age: 0, life: 900, vx: 0, vy: 0, g: 0, r: 1.6, a: 1, kind: "dot", ...p }); }
+function crabEmote(ch, color, size) { const [x, y] = [crab.x, crab.y - 26]; crabPart({ kind: "text", ch, color, x: x + 12, y, vx: (Math.random() - 0.5) * 0.02, vy: -0.03, life: 1400, r: size || 13 }); }
+function crabReact(kind) {               // dipanggil saat ada transaksi baru di Aliran Keputusan
+  if (crab.state === "sleep") crabState("wait");
+  crab.react = { kind, t: 0, dur: kind === "RUGI" ? 1300 : 900 };
+  if (kind === "UNTUNG") { crab.pulse = 1.35; crabEmote("★", C.kelp, 15);
+    for (let k = 0; k < 12; k++) crabPart({ x: crab.x, y: crab.y, vx: (Math.random() - 0.5) * 0.22, vy: (Math.random() - 0.5) * 0.22, color: "77,255,168", r: 1.6, life: 800 }); }
+  if (kind === "RUGI") crabEmote("…", C.coral, 15);
+}
+
+// jalan ke titik (x,y): berbelok dulu menghadap tujuan, melambat saat dekat. Hasil: jarak tersisa
+function steer(dt, tx, ty, vmax = 0.085) {
+  const dx = tx - crab.x, dy = ty - crab.y, d = Math.hypot(dx, dy);
+  if (d < 0.5) { crab.v = 0; return 0; }
+  const da = angDiff(Math.atan2(dy, dx), crab.a);
+  crab.a += Math.max(-0.0055 * dt, Math.min(0.0055 * dt, da));
+  const want = (d < 40 ? vmax * d / 40 : vmax) * Math.max(0.15, Math.cos(da));
+  crab.v += (want - crab.v) * Math.min(1, dt / 160);
+  crab.x += Math.cos(crab.a) * crab.v * dt; crab.y += Math.sin(crab.a) * crab.v * dt;
+  return d;
+}
+function brake(dt) { crab.v *= Math.max(0, 1 - dt / 120); crab.x += Math.cos(crab.a) * crab.v * dt; crab.y += Math.sin(crab.a) * crab.v * dt; }
+
+function updLegs(dt) {
+  const lead = Math.min(8, crab.v * 85), tk = crab.tuck;
+  for (const L of crab.legs) {
+    const [ix, iy] = toW(L.rest[0] * (1 - tk * 0.35) + lead, L.rest[1] * (1 - tk * 0.4));
+    if (!L.foot) L.foot = { x: ix, y: iy };
+    if (L.t < 1) {
+      L.t = Math.min(1, L.t + dt / 100); const u = L.t * L.t * (3 - 2 * L.t);
+      L.foot.x = lerp(L.from.x, L.to.x, u); L.foot.y = lerp(L.from.y, L.to.y, u); L.lift = Math.sin(Math.PI * L.t);
+      if (L.t >= 1) crab.prints.push({ x: L.foot.x, y: L.foot.y, age: 0 });
+    } else {
+      L.lift = 0;
+      const d = Math.hypot(ix - L.foot.x, iy - L.foot.y), busy = crab.legs.some(o => o.group !== L.group && o.t < 1);
+      if ((d > 10 || (d > 2.5 && crab.v < 0.01)) && !busy) {
+        L.from = { ...L.foot }; L.to = { x: ix + (ix - L.foot.x) * 0.3, y: iy + (iy - L.foot.y) * 0.3 }; L.t = 0;
+      }
+    }
+  }
+  if (crab.prints.length > 160) crab.prints.splice(0, crab.prints.length - 160);
+}
+
+function crabUpdate(dt, t, env) {
+  crab.st += dt;
+  const cl = crab.claw; let tl = 0, tr = 0, tlo = 0.3, tro = 0.3, eyes = "open", tuck = 0;
+  const card = env.card(env.active);
+  switch (crab.state) {
+    case "walk": {
+      if (!crab.cur) crab.cur = { x0: crab.x, y0: crab.y };
+      const wob = Math.sin(t * 0.004) * 6;                     // jalan sedikit berkelok
+      const d = steer(dt, card.x + wob * Math.sin(crab.a), card.y + wob * Math.cos(crab.a));
+      tlo = tro = 0.15 + Math.max(0, Math.sin(t * 0.008)) * 0.2;
+      if (d < 5 && env.near) crabState("pick", 1000);
+      break;
+    }
+    case "pick": {                                                // pindai kartu lalu ambil datanya
+      brake(dt); crab.a += Math.sin(crab.st * 0.012) * 0.012 * dt / 16;
+      tl = tr = 0.6; tlo = tro = 0.25 + Math.abs(Math.sin(crab.st * 0.02)) * 0.6;
+      if (crab.st > 480 && !crab.picked) {
+        crab.picked = true; crab.flash = 1; crab.arrived = env.active; env.hit();
+        if (crab.cur && Math.hypot(crab.cur.x0 - card.x, crab.cur.y0 - card.y) > 30)
+          crab.threads.push({ x0: crab.cur.x0, y0: crab.cur.y0, x1: card.x, y1: card.y, born: t, seed: Math.random() });
+        crab.cur = null;
+        for (let k = 0; k < 16; k++) crabPart({ x: card.x, y: card.y, vx: (Math.random() - 0.5) * 0.2, vy: (Math.random() - 0.5) * 0.2, color: "94,242,255", r: 1.6, life: 800 });
+      }
+      if (crab.st >= crab.dur) {
+        crab.cycles++; crab.home = { x: crab.x, y: crab.y };
+        const pick = crab.cycles % 7 === 0 ? "sleep" : IDLE[Math.floor(Math.random() * IDLE.length)];
+        crabState(pick, pick === "sleep" ? 5200 : pick === "explore" ? 6000 : 1900 + Math.random() * 1300);
+        if (pick === "wave") crabEmote("hai!", C.amber, 11);
+      }
+      break;
+    }
+    case "explore": {                                             // jalan-jalan sebentar ke titik acak lalu kembali
+      if (!crab.wp) {
+        const r = 40 + Math.random() * 60, ang = Math.random() * 6.283;
+        crab.wp = [{ x: Math.max(20, Math.min(env.w - 20, crab.home.x + Math.cos(ang) * r)), y: Math.max(20, Math.min(env.h - 16, crab.home.y + Math.sin(ang) * r * 0.6)), wait: 500 },
+          { x: crab.home.x, y: crab.home.y, wait: 0 }];
+        crab.wpi = 0; crab.wpWait = 0;
+      }
+      const w = crab.wp[crab.wpi];
+      if (w) {
+        if (crab.wpWait > 0) { brake(dt); crab.wpWait -= dt; crab.a += Math.sin(t * 0.006) * 0.01; if (crab.wpWait <= 0) crab.wpi++; }
+        else if (steer(dt, w.x, w.y, 0.06) < 4) { crab.wpWait = w.wait || 1; if (!w.wait) crab.wpi++; else if (Math.random() < 0.5) crabEmote("?", C.cyan, 13); }
+      } else { brake(dt); crab.st = Math.max(crab.st, crab.dur); }
+      break;
+    }
+    case "wave":
+      brake(dt); tl = 1; tlo = 0.2 + Math.abs(Math.sin(crab.st * 0.02)) * 0.8; eyes = "happy";
+      break;
+    case "dig": {
+      brake(dt); const s = Math.sin(crab.st * 0.022); tuck = 0.3;
+      tl = 0.3 + 0.4 * Math.max(0, s); tr = 0.3 + 0.4 * Math.max(0, -s);
+      if (Math.random() < dt / 40) { const back = crab.a + Math.PI + (Math.random() - 0.5) * 1.6, sp = 0.05 + Math.random() * 0.08;
+        crabPart({ x: crab.x, y: crab.y, vx: Math.cos(back) * sp, vy: Math.sin(back) * sp, color: "255,214,150", a: 0.7, r: 1.4, life: 700 }); }
+      if (crab.st > crab.dur * 0.7) { tuck = 0; tr = 1; tro = 0.6; eyes = "happy"; if (!crab.pearl) { crab.pearl = 1; crabEmote("✦", C.amber, 15); } }
+      break;
+    }
+    case "look":
+      brake(dt); crab.a += Math.cos(crab.st * 0.004) * 0.0045 * dt; tlo = tro = 0.5;
+      if (crab.st > crab.dur * 0.45 && crab.st - dt <= crab.dur * 0.45) crabEmote("?", C.cyan, 15);
+      break;
+    case "dance": {
+      brake(dt); crab.a += 0.006 * dt; const beat = Math.floor(crab.st / 420);
+      if (beat !== crab._beat) { crab._beat = beat; crab.pulse = 1.18; crabEmote(beat % 2 ? "♪" : "♫", C.pink, 14); }
+      tl = beat % 2 ? 1 : 0.2; tr = beat % 2 ? 0.2 : 1; tlo = tro = 0.7; eyes = "happy";
+      break;
+    }
+    case "bubbles":
+      brake(dt); eyes = "content";
+      if (Math.random() < dt / 230) { const [mx, my] = toW(13, 0);
+        crabPart({ kind: "bubble", x: mx, y: my, vx: Math.cos(crab.a) * 0.02 + (Math.random() - 0.5) * 0.015, vy: -0.03 - Math.random() * 0.02, r: 1.5 + Math.random() * 2.2, life: 1800, color: "160,240,255" }); }
+      break;
+    case "clean":
+      brake(dt); tl = 0.9; tlo = 0.1; crab.rub = Math.sin(crab.st * 0.02); eyes = crab.rub > 0 ? "closed" : "open";
+      break;
+    case "sleep":
+      brake(dt); tuck = 1; eyes = "closed"; tl = tr = -0.4; tlo = tro = 0;
+      crab.pulse = 1 + Math.sin(crab.st * 0.003) * 0.03;
+      if (Math.floor(crab.st / 900) !== crab._z) { crab._z = Math.floor(crab.st / 900); crabEmote("z", C.text2, 11 + (crab._z % 3) * 3); }
+      break;
+    case "wait":
+      brake(dt); tlo = tro = 0.3 + Math.max(0, Math.sin(t * 0.004)) * 0.4;
+      break;
+  }
+  if ((IDLE.includes(crab.state) || crab.state === "sleep") && crab.st >= crab.dur) {
+    crab.pearl = 0; crab.idleDone = env.active; crabState("wait");
+  }
+  if (crab.state === "wait" && crab.arrived !== env.active) { crab.cur = { x0: crab.x, y0: crab.y }; crabState("walk"); }
+  // reaksi transaksi
+  if (crab.react) {
+    const r = crab.react; r.t += dt;
+    if (r.kind === "UNTUNG") { tl = tr = 1; tlo = tro = 0.9; eyes = "happy"; crab.a += 0.009 * dt; }
+    if (r.kind === "RUGI") { tl = tr = -0.4; tlo = tro = 0; eyes = "sad"; crab.shake = Math.sin(t * 0.09) * 1.5;
+      if (Math.random() < dt / 260) crabPart({ kind: "drop", x: crab.x + (Math.random() - 0.5) * 16, y: crab.y - 6, vx: (Math.random() - 0.5) * 0.04, vy: 0.02, g: 0.0004, color: "120,200,255", r: 2, life: 800 }); }
+    if (r.kind === "tickle") { eyes = "happy"; tl = tr = 0.9; tlo = tro = 0.8; crab.a += 0.011 * dt; }
+    if (r.t >= r.dur) { crab.react = null; crab.shake = 0; }
+  }
+  // mata melirik kursor kalau dekat
+  crab.eyes = crab.blink > 0 && eyes === "open" ? "closed" : eyes;
+  if (crab.mouse && Math.hypot(crab.mouse.x - crab.x, crab.mouse.y - crab.y) < 160) {
+    const ang = Math.atan2(crab.mouse.y - crab.y, crab.mouse.x - crab.x) - crab.a; crab.look = [Math.cos(ang), Math.sin(ang)];
+  } else crab.look = [1, 0];
+  crab.tuck += (tuck - crab.tuck) * Math.min(1, dt / 200);
+  const k = Math.min(1, dt / 90);
+  cl.l += (tl - cl.l) * k; cl.r += (tr - cl.r) * k; cl.lo += (tlo - cl.lo) * k * 1.5; cl.ro += (tro - cl.ro) * k * 1.5;
+  crab.pulse += (1 - crab.pulse) * Math.min(1, dt / 160);
+  crab.flash = Math.max(0, crab.flash - dt / 700);
+  if (!crab.blink && Math.random() < dt / 3500) crab.blink = 140; crab.blink = Math.max(0, crab.blink - dt);
+  crab.x = Math.max(14, Math.min(env.w - 14, crab.x)); crab.y = Math.max(14, Math.min(env.h - 10, crab.y));
+  updLegs(dt);
+  for (let i = crab.parts.length - 1; i >= 0; i--) {
+    const p = crab.parts[i]; p.age += dt; p.vy += p.g * dt; p.x += p.vx * dt; p.y += p.vy * dt;
+    if (p.kind === "bubble") p.x += Math.sin(p.age * 0.01) * 0.15;
+    if (p.age >= p.life) crab.parts.splice(i, 1);
+  }
+  for (const p of crab.prints) p.age += dt;
+  crab.threads = crab.threads.filter(th => t - th.born < 16000);
+}
+
+function drawLeg(g, L) {
+  const [hx, hy] = toW(L.hip[0], L.hip[1]);
+  let fx = L.foot.x, fy = L.foot.y, dx = fx - hx, dy = fy - hy, d = Math.hypot(dx, dy);
+  const max = L1 + L2 - 0.5; if (d > max) { fx = hx + dx / d * max; fy = hy + dy / d * max; d = max; }
+  const base = Math.atan2(fy - hy, fx - hx), A = Math.acos(Math.max(-1, Math.min(1, (L1 * L1 + d * d - L2 * L2) / (2 * L1 * Math.max(d, 0.01)))));
+  // pilih lutut yang menjauh dari badan
+  const k1 = [hx + Math.cos(base + A) * L1, hy + Math.sin(base + A) * L1], k2 = [hx + Math.cos(base - A) * L1, hy + Math.sin(base - A) * L1];
+  const knee = Math.hypot(k1[0] - crab.x, k1[1] - crab.y) > Math.hypot(k2[0] - crab.x, k2[1] - crab.y) ? k1 : k2;
+  const amber = C.amber;
+  g.strokeStyle = rgba(amber, 0.9); g.lineWidth = 2.4; g.beginPath(); g.moveTo(hx, hy); g.lineTo(knee[0], knee[1]); g.stroke();
+  g.strokeStyle = rgba(amber, 0.75); g.lineWidth = 1.5; g.beginPath(); g.moveTo(knee[0], knee[1]); g.lineTo(fx, fy); g.stroke();
+  g.fillStyle = rgba(C.coral, 0.95); g.beginPath(); g.arc(knee[0], knee[1], 1.9, 0, 6.283); g.fill();
+  g.fillStyle = L.lift > 0.05 ? "#fff3d6" : rgba(amber, 0.9); g.beginPath(); g.arc(fx, fy, 1.4 + L.lift * 1.2, 0, 6.283); g.fill();
+}
+
+function drawClaw(g, side, ext, open) {   // koordinat lokal badan (x = depan)
+  const sh = [8, side * 6], el = [12 + ext * 6, side * (14 - ext * 2)], wr = [19 + ext * 9, side * (10 - ext * 3)];
+  if (side < 0 && crab.state === "clean") { el[0] = 13; el[1] = -8; wr[0] = 13 + crab.rub * 2; wr[1] = -3; }
+  g.strokeStyle = rgba(C.amber, 0.95); g.lineWidth = 2.4; g.beginPath(); g.moveTo(sh[0], sh[1]); g.lineTo(el[0], el[1]); g.lineTo(wr[0], wr[1]); g.stroke();
+  g.save(); g.translate(wr[0], wr[1]); g.rotate(side * (-0.35 + ext * 0.2));
+  g.fillStyle = C.coral; g.beginPath(); g.ellipse(3, 0, 5, 3.6, 0, 0, 6.283); g.fill();
+  g.strokeStyle = rgba(C.amber, 1); g.lineWidth = 1.8;
+  g.beginPath(); g.moveTo(6, -1.5 * side); g.quadraticCurveTo(10, -side * (2 + open * 5), 12, -side * open * 3); g.stroke();
+  g.beginPath(); g.moveTo(6, 1.5 * side); g.quadraticCurveTo(10, side * (2 + open * 2.5), 12, side * open * 1.5); g.stroke();
+  if (side > 0 && crab.pearl) {
+    g.globalCompositeOperation = "lighter";
+    const pg = g.createRadialGradient(11, 0, 0, 11, 0, 10); pg.addColorStop(0, "rgba(255,245,220,0.95)"); pg.addColorStop(1, "rgba(255,207,107,0)");
+    g.fillStyle = pg; g.beginPath(); g.arc(11, 0, 10, 0, 6.283); g.fill(); g.globalCompositeOperation = "source-over";
+  }
+  g.restore();
+}
+
+function drawCrabTop(g, t) {
+  const amber = C.amber, coral = C.coral;
+  g.lineCap = "round"; g.lineJoin = "round";
+  for (const L of crab.legs) drawLeg(g, L);
+  g.save(); g.translate(crab.x + (crab.shake || 0), crab.y); g.rotate(crab.a); g.scale(crab.pulse, crab.pulse);
+  g.globalCompositeOperation = "lighter";
+  const halo = g.createRadialGradient(0, 0, 0, 0, 0, 30); halo.addColorStop(0, rgba(amber, 0.12 + crab.flash * 0.3)); halo.addColorStop(1, rgba(amber, 0));
+  g.fillStyle = halo; g.beginPath(); g.arc(0, 0, 34, 0, 6.283); g.fill(); g.globalCompositeOperation = "source-over";
+  drawClaw(g, -1, crab.claw.l, crab.claw.lo); drawClaw(g, 1, crab.claw.r, crab.claw.ro);
+  // cangkang (lebih lebar daripada panjang, tepi depan bergerigi kecil)
+  const body = g.createRadialGradient(4, -3, 1, 0, 0, 15);
+  body.addColorStop(0, "#ffd28a"); body.addColorStop(0.5, "#f08a3c"); body.addColorStop(1, "#b8323f");
+  g.fillStyle = body; g.beginPath(); g.ellipse(0, 0, 11, 14, 0, 0, 6.283); g.fill();
+  g.strokeStyle = rgba(amber, 0.95); g.lineWidth = 1.2; g.stroke();
+  g.strokeStyle = "rgba(120,20,30,0.45)"; g.lineWidth = 1; g.beginPath(); g.moveTo(5, -9); g.quadraticCurveTo(-1, 0, 5, 9); g.stroke();
+  g.fillStyle = rgba(coral, 0.9);
+  for (const s of [-1, 1]) for (let k = 0; k < 3; k++) { g.beginPath(); g.arc(7.5 - k * 1.6, s * (6 + k * 2.6), 1, 0, 6.283); g.fill(); }
+  g.fillStyle = "rgba(255,255,255,0.35)"; for (const [x, y] of [[-3, -5], [-4, 0], [-3, 5], [2, 0]]) { g.beginPath(); g.arc(x, y, 1.2, 0, 6.283); g.fill(); }
+  // bola data di punggung
+  g.globalCompositeOperation = "lighter";
+  const r = 5.5 + crab.flash * 10, orb = g.createRadialGradient(-5, 0, 0, -5, 0, r);
+  orb.addColorStop(0, rgba(C.cyan, 0.75)); orb.addColorStop(0.5, rgba(C.cyan, 0.22)); orb.addColorStop(1, rgba(C.cyan, 0));
+  g.fillStyle = orb; g.beginPath(); g.arc(-5, 0, r, 0, 6.283); g.fill();
+  g.fillStyle = "#e6fdff"; g.beginPath(); g.arc(-5, 0, 1.8, 0, 6.283); g.fill(); g.globalCompositeOperation = "source-over";
+  // mata bertangkai di depan
+  for (const s of [-1, 1]) {
+    const ex = 11.5, ey = s * 4.2;
+    g.strokeStyle = rgba(amber, 1); g.lineWidth = 1.3; g.beginPath(); g.moveTo(8, s * 3); g.lineTo(ex, ey); g.stroke();
+    if (crab.eyes === "open") {
+      g.fillStyle = "#fff"; g.beginPath(); g.arc(ex, ey, 2.4, 0, 6.283); g.fill();
+      g.fillStyle = "#021022"; g.beginPath(); g.arc(ex + crab.look[0] * 1, ey + crab.look[1] * 1, 1.15, 0, 6.283); g.fill();
+    } else {
+      g.strokeStyle = "#fff"; g.lineWidth = 1.3; g.beginPath();
+      if (crab.eyes === "happy") g.arc(ex - 0.5, ey, 2, -Math.PI * 0.5 - 0.9, -Math.PI * 0.5 + 0.9);
+      else if (crab.eyes === "sad") { g.moveTo(ex - 1.5, ey - s * 1.8); g.lineTo(ex + 1.5, ey - s * 0.6); }
+      else if (crab.eyes === "content") g.arc(ex + 1, ey, 2, Math.PI * 0.5 - 0.9, Math.PI * 0.5 + 0.9);
+      else { g.moveTo(ex, ey - 2); g.lineTo(ex, ey + 2); }
+      g.stroke();
+    }
+  }
+  g.restore();
+}
+
+function drawThread(g, x0, y0, x1, y1, alpha, t, seed) {
+  const mx = (x0 + x1) / 2, my = (y0 + y1) / 2 - Math.min(40, Math.abs(x1 - x0) * 0.12);
+  const grad = g.createLinearGradient(x0, y0, x1, y1);
+  grad.addColorStop(0, rgba(C.cyan, 0.05 * alpha)); grad.addColorStop(0.5, rgba(C.cyan, 0.55 * alpha)); grad.addColorStop(1, rgba(C.teal, 0.8 * alpha));
+  g.strokeStyle = grad; g.lineWidth = 1.2; g.beginPath(); g.moveTo(x0, y0); g.quadraticCurveTo(mx, my, x1, y1); g.stroke();
+  g.globalCompositeOperation = "lighter";
+  for (const off of [0, 0.5]) {   // paket cahaya mengalir sepanjang benang
+    const u = (t * 0.00045 + seed + off) % 1, x = (1 - u) ** 2 * x0 + 2 * (1 - u) * u * mx + u * u * x1, y = (1 - u) ** 2 * y0 + 2 * (1 - u) * u * my + u * u * y1;
+    const h = g.createRadialGradient(x, y, 0, x, y, 6); h.addColorStop(0, rgba(C.cyan, 0.9 * alpha)); h.addColorStop(1, rgba(C.cyan, 0));
+    g.fillStyle = h; g.beginPath(); g.arc(x, y, 6, 0, 6.283); g.fill();
+  }
+  g.globalCompositeOperation = "source-over";
+}
+
+function drawWalker(t) {
+  const cv = $("walker"), box = $("current"); if (!cv || !box.children.length) return;
+  const dpr = Math.min(devicePixelRatio || 1, 2), w = cv.clientWidth, h = cv.clientHeight;
+  if (cv.width !== Math.round(w * dpr) || cv.height !== Math.round(h * dpr)) { cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr); }
+  const g = cv.getContext("2d"); g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, w, h);
+  const cr = cv.getBoundingClientRect();
+  const card = i => { const el = box.children[i].querySelector(".v") || box.children[i], r = el.getBoundingClientRect();
+    return { x: r.left - cr.left + Math.min(r.width, 70) * 0.5 + 6, y: r.top - cr.top + r.height * 0.55 }; };
+  const c0 = card(activeStage);
+  if (crab.x == null) { crab.x = c0.x; crab.y = c0.y + 24; }
+  const dt = REDUCED ? 16 : Math.min(120, t - (crab.last || t)); crab.last = t;
+  if (REDUCED) { crab.x = c0.x; crab.y = c0.y; }
+  const env = { w, h, active: activeStage, card, near: Math.hypot(c0.x - crab.x, c0.y - crab.y) < 6,
+    hit: () => { const st = box.children[activeStage]; st.classList.remove("hit"); void st.offsetWidth; st.classList.add("hit"); } };
+  crabUpdate(dt, t, env);
+  // jejak kaki & benang data
+  for (const p of crab.prints) { const a = Math.max(0, 1 - p.age / 2600); if (a <= 0) continue;
+    g.fillStyle = rgba(C.amber, 0.35 * a); g.beginPath(); g.arc(p.x, p.y, 1.1, 0, 6.283); g.fill(); }
+  for (const th of crab.threads) drawThread(g, th.x0, th.y0, th.x1, th.y1, Math.max(0, 1 - (t - th.born) / 16000), t, th.seed);
+  if (crab.cur) { const [bx, by] = toW(-10, 0); drawThread(g, crab.cur.x0, crab.cur.y0, bx, by, 1, t, 0.3); }
+  drawCrabTop(g, t);
+  for (const p of crab.parts) {
+    const a = p.a * (1 - p.age / p.life);
+    if (p.kind === "text") { g.fillStyle = p.color; g.globalAlpha = Math.max(0, a); g.font = `800 ${p.r}px JetBrains Mono`; g.textAlign = "center"; g.fillText(p.ch, p.x, p.y); g.globalAlpha = 1; }
+    else if (p.kind === "bubble") { g.strokeStyle = `rgba(${p.color},${a * 0.8})`; g.lineWidth = 1; g.beginPath(); g.arc(p.x, p.y, p.r, 0, 6.283); g.stroke();
+      g.fillStyle = `rgba(255,255,255,${a * 0.6})`; g.beginPath(); g.arc(p.x - p.r * 0.35, p.y - p.r * 0.35, p.r * 0.25, 0, 6.283); g.fill(); }
+    else if (p.kind === "drop") { g.fillStyle = `rgba(${p.color},${a})`; g.beginPath(); g.moveTo(p.x, p.y - p.r * 2); g.quadraticCurveTo(p.x + p.r * 1.3, p.y, p.x, p.y + p.r); g.quadraticCurveTo(p.x - p.r * 1.3, p.y, p.x, p.y - p.r * 2); g.fill(); }
+    else { g.fillStyle = `rgba(${p.color},${a})`; g.beginPath(); g.arc(p.x, p.y, p.r, 0, 6.283); g.fill(); }
+  }
+}
+// interaksi mouse: mata melirik kursor, klik kepiting = berputar & senang
+(() => {
+  const panel = $("p-current"), cv = $("walker");
+  const local = e => { const r = cv.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
+  panel.addEventListener("mousemove", e => { crab.mouse = local(e); });
+  panel.addEventListener("mouseleave", () => { crab.mouse = null; });
+  panel.addEventListener("click", e => {
+    const m = local(e);
+    if (Math.hypot(m.x - crab.x, m.y - crab.y) < 28) { crab.react = { kind: "tickle", t: 0, dur: 650 }; crab.pulse = 1.3; crabEmote("♥", C.pink, 16); }
+  });
+})();
+
+function tick(t) { drawSonar(t); drawWalker(t); requestAnimationFrame(tick); }
+requestAnimationFrame(tick);
+setInterval(() => $("clock").textContent = new Date().toLocaleTimeString("id-ID", { hour12: false }), 1000);
+addEventListener("resize", () => D && drawTide());
+refresh(); setInterval(refresh, 5000);
+
+/* ================= MEME COIN · DETAIL LENGKAP =================
+   Port dari tema Terminal (web/index.html) dengan gaya Abyss. Datanya sama (/api/summary, /api/positions,
+   /api/coin); semuanya di dalam satu fungsi supaya nama variabel tidak bentrok dengan Command Center di atas. */
+const MD = (() => {
+  const el = id => document.getElementById(id);
+  const PALETTE = ["#5ef2ff", "#ff9a5c", "#4dffa8", "#9d7bff", "#ffcf6b", "#ff6fd8", "#ff5d73", "#2de2c4", "#7cc4ff", "#c9a7ff", "#e8ff6b", "#ffb3e6", "#6bffd8"];
+  let S = null, scope = "all", tab = "open", selected = null;
+  const color = s => s === "all" ? "#e6f6ff" : PALETTE[((S && S.variants[s] ? S.variants[s].order : 7)) % PALETTE.length];
+  const STRAT = new Proxy({}, { get: (_, s) => s === "all" ? "SEMUA VARIAN" : (S && S.variants[s] ? S.variants[s].label : String(s)) });
+  const TZ = -new Date().getTimezoneOffset() * 60;
+  const usd = v => (v < 0 ? "-$" : "$") + Math.abs(v || 0).toFixed(2);
+  const sUsd = v => (v > 0 ? "+$" : v < 0 ? "-$" : "$") + Math.abs(v || 0).toFixed(2);
+  const pct = v => v == null ? "–" : (v >= 0 ? "+" : "") + (v * 100).toFixed(1) + "%";
+  const x = v => v == null ? "–" : v.toFixed(2) + "x";
+  const cls = v => v > 0 ? "pos" : v < 0 ? "neg" : "neu";
+  const arrow = v => v > 0 ? "▲" : v < 0 ? "▼" : "■";
+  const clock = ts => new Date(ts * 1000).toLocaleString("id-ID", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit", hour12: false });
+  const dur = s => s < 3600 ? Math.floor(s / 60) + "m" : s < 86400 ? (s / 3600).toFixed(1) + "j" : (s / 86400).toFixed(1) + "h";
+  const agoM = ts => dur(Date.now() / 1000 - ts) + " lalu";
+  const api = p => fetch(p, { cache: "no-store" }).then(r => r.json());
+  const n0 = v => Math.round(v || 0).toLocaleString("id-ID");
+  const chartOptions = () => ({
+    autoSize: true,
+    layout: { background: { type: "solid", color: "transparent" }, textColor: C.muted, fontFamily: "JetBrains Mono", fontSize: 11 },
+    grid: { vertLines: { color: "rgba(94,242,255,0.04)" }, horzLines: { color: "rgba(94,242,255,0.08)" } },
+    rightPriceScale: { borderColor: "rgba(94,242,255,0.25)" }, timeScale: { borderColor: "rgba(94,242,255,0.25)", timeVisible: true, secondsVisible: false },
+    crosshair: { vertLine: { color: "rgba(94,242,255,0.4)", labelBackgroundColor: "#0b2a44" }, horzLine: { color: "rgba(94,242,255,0.4)", labelBackgroundColor: "#0b2a44" } } });
+  const badge = (bg, text) => `<span class="md-badge" style="background:${bg}">${text}</span>`;
+
+  function renderScopes() {
+    const list = ["all", ...S.strategies], box = el("md-scopes");
+    if (document.activeElement && box.contains(document.activeElement)) return;
+    box.innerHTML = `<select aria-label="Pilih varian" style="border-color:${color(scope)}">` +
+      list.map(s => `<option value="${esc(s)}" ${s === scope ? "selected" : ""}>${esc(STRAT[s])}</option>`).join("") + `</select>`;
+    box.querySelector("select").onchange = e => { scope = e.target.value; e.target.blur(); render(); };
+  }
+  function setScope(s) { scope = s; render(); el("md-head").scrollIntoView({ behavior: "smooth", block: "start" }); }
+
+  function kellyBadge(m) {
+    if (m.kelly_status === "belajar") return badge(C.amber, `BELAJAR ${m.closed}/${m.kelly_min}`);
+    if (m.kelly_status === "stop") return badge(C.coral, "STOP · EDGE NEGATIF");
+    return badge(C.kelp, `AKTIF · f=${m.kelly_f.toFixed(2)}`);
+  }
+  function variantDesc(n) {
+    const v = S.variants[n], a = S.auto;
+    if (v && v.mode === "auto" && a) {
+      const b = a.action === "istirahat" ? badge(C.muted, "😴 ISTIRAHAT") : a.action === "pemanasan" ? badge(C.amber, "PEMANASAN")
+        : badge(C.cyan, "🤖 IKUT " + esc((a.follow_label || a.follow).toUpperCase()));
+      return `${b} <span>${esc(a.detail)}</span>`;
+    }
+    return esc(v ? v.desc : "");
+  }
+  function renderLab() {
+    const rows = S.strategies.map(n => ({ n, m: S.scopes[n] })).filter(r => r.m);
+    if (!rows.length) { el("md-lab").innerHTML = `<div class="empty">Belum ada data.</div>`; return; }
+    rows.sort((a, b) => (b.m.closed ? b.m.pnl : -1e9) - (a.m.closed ? a.m.pnl : -1e9));
+    el("md-lab").innerHTML = `<table class="lb"><thead><tr><th>#</th><th>VARIAN</th><th>ATURAN</th><th class="num">POSISI</th><th class="num">WIN RATE</th>
+      <th class="num">AVG R/R</th><th class="num">PROFIT F.</th><th class="num">PnL MODAL TETAP</th><th class="num">PnL REM KELLY</th><th>STATUS KELLY</th><th class="num">DIPEGANG</th></tr></thead><tbody>` +
+      rows.map(({ n, m }, i) => `<tr data-s="${esc(n)}" class="${n === scope ? "cur" : ""}"><td class="rank">${i + 1}</td>
+        <td><span class="sw" style="background:${color(n)};box-shadow:0 0 6px ${color(n)}"></span><b>${esc(STRAT[n])}</b></td>
+        <td class="desc">${variantDesc(n)}</td><td class="num">${m.closed}</td>
+        <td class="num">${m.win_rate == null ? "–" : (m.win_rate * 100).toFixed(0) + "%"}</td>
+        <td class="num">${m.rr ? m.rr.toFixed(2) : "–"}</td><td class="num">${m.profit_factor ? m.profit_factor.toFixed(2) : "–"}</td>
+        <td class="num ${cls(m.pnl)}">${m.closed ? `${arrow(m.pnl)} ${sUsd(m.pnl)} <span class="mut">(${pct(m.cost ? m.pnl / m.cost : null)})</span>` : "–"}</td>
+        <td class="num ${cls(m.kelly_pnl)}">${m.closed ? `${arrow(m.kelly_pnl)} ${sUsd(m.kelly_pnl)}` : "–"}</td>
+        <td>${kellyBadge(m)}</td><td class="num">${m.open}</td></tr>`).join("") + `</tbody></table>
+      <div class="note">PnL modal tetap = $${(S.stats.batch_budget_usd || 20) / (S.stats.coins_per_batch || 20)} per koin. PnL rem Kelly = hasil kalau ukuran taruhan diatur rumus Kelly (¼ Kelly)
+      dari hasil varian itu sendiri: fase BELAJAR (&lt; ${rows[0].m.kelly_min} posisi) memakai modal tetap, STOP = taruhan $0 karena keunggulannya negatif.</div>`;
+    el("md-lab").querySelectorAll("tbody tr").forEach(tr => tr.onclick = () => setScope(tr.dataset.s));
+  }
+
+  // ---- pita berjalan
+  function tickerItems() {
+    const st = S.stats, a = S.scopes.all || {}, lab = S.strategies.map(n => S.scopes[n]).filter(Boolean);
+    const count = s => lab.filter(m => m.kelly_status === s).length, items = [];
+    if (st.trading_paused) items.push(`<b class="warn">⏸ TRADING DIJEDA</b> <span class="lbl">ketik /mulai di Telegram untuk melanjutkan</span>`);
+    items.push(`<span class="lbl">SOL/USD</span> <b>${st.sol_usd ? "$" + st.sol_usd.toFixed(2) : "–"}</b>`,
+      `<span class="lbl">TOTAL PnL</span> <b class="${cls(a.pnl)}">${arrow(a.pnl)} ${sUsd(a.pnl)}</b>`,
+      `<span class="lbl">TOKEN BARU TERPANTAU</span> <b>${n0(st.tokens_seen)}</b>`, `<span class="lbl">SPAM DILEWATI</span> <b>${n0(st.spam_skipped)}</b>`,
+      `<span class="lbl">VARIAN DIUJI</span> <b>${S.strategies.length}</b>`,
+      `<span class="lbl">KELLY</span> <b class="pos">${count("aktif")} AKTIF</b> · <b class="neg">${count("stop")} STOP</b> · <b class="warn">${count("belajar")} BELAJAR</b>`);
+    if (st.antirug_blocked != null) items.push(`<span class="lbl">ANTI-RUG MENOLAK</span> <b class="neg">${n0(st.antirug_blocked)}</b> koin`);
+    if (S.features) items.push(`<span class="lbl">DATA BELAJAR AI</span> <b>${n0(S.features.n)}</b> koin · <b>${n0(S.features.x2)}</b> sempat 2x · <b>${n0(S.features.grad)}</b> lulus DEX`);
+    S.strategies.forEach(n => { const m = S.scopes[n]; if (m && m.closed)
+      items.push(`<span class="sw" style="background:${color(n)}"></span><b>${esc(STRAT[n])}</b> <b class="${cls(m.pnl)}">${arrow(m.pnl)} ${sUsd(m.pnl)}</b>`); });
+    (S.feed || []).slice(0, 8).forEach(f => { const buy = f.side === "BELI", m = f.mult ?? 0;
+      items.push(buy ? `<b style="color:${C.cyan}">BELI</b> <b>${esc(String(f.symbol).slice(0, 14))}</b>`
+        : `<b class="${m >= 1 ? "pos" : "neg"}">JUAL</b> <b>${esc(String(f.symbol).slice(0, 14))}</b> <span class="${m >= 1 ? "pos" : "neg"}">${x(m)}</span>`); });
+    return items;
+  }
+  const TICKER = (() => {
+    const box = el("md-ticker"), track = el("md-ticker-track");
+    let offset = 0, groupW = 0, paused = false, last = 0;
+    box.addEventListener("mouseenter", () => paused = true); box.addEventListener("mouseleave", () => paused = false);
+    function update(items) {
+      const html = items.map(t => `<span class="it">${t}</span><span class="sep">◆</span>`).join("");
+      track.innerHTML = `<span class="group">${html}</span>`;
+      groupW = track.firstElementChild.getBoundingClientRect().width;
+      const copies = groupW ? Math.max(2, Math.ceil(box.clientWidth / groupW) + 1) : 2;
+      track.innerHTML += `<span class="group" aria-hidden="true">${html}</span>`.repeat(copies - 1);
+      if (groupW) offset = -((-offset) % groupW);
+    }
+    function loop(ts) {
+      const dt = last ? Math.min(0.1, (ts - last) / 1000) : 0; last = ts;
+      if (!REDUCED && !paused && groupW) { offset -= 55 * dt; if (-offset >= groupW) offset += groupW; track.style.transform = `translateX(${offset}px)`; }
+      requestAnimationFrame(loop);
+    }
+    requestAnimationFrame(loop);
+    return { update };
+  })();
+
+  // ---- PnL & ringkasan
+  function renderHero() {
+    const m = S.scopes[scope] || S.scopes.all, roi = m.cost ? m.pnl / m.cost : null;
+    el("md-hero-scope").innerHTML = `<span class="sw" style="background:${color(scope)}"></span>${esc(STRAT[scope])}`;
+    el("md-hero-sub").innerHTML = `<span class="tag">${m.days ? m.days.toFixed(1) + " HARI" : "BARU MULAI"}</span> modal terpakai ${usd(m.cost)} → kembali ${usd(m.returned)}`;
+    el("md-hero").innerHTML = `<span class="${cls(m.pnl)}">${arrow(m.pnl)} ${sUsd(m.pnl)}</span><small class="${cls(m.pnl)}">${pct(roi)}</small>`;
+    const kv = [["Trades (beli)", n0(m.buys)], ["Posisi selesai", n0(m.closed)], ["Avg R/R", m.rr ? m.rr.toFixed(2) : "–"],
+      ["Profit factor", m.profit_factor ? m.profit_factor.toFixed(2) : "–"], ["Putaran untung", `${m.batch_wins}/${m.batches}`],
+      ["Terbaik", x(m.best)], ["Terburuk", x(m.worst)], ["Lulus DEX", m.graduated], ["Dipegang", m.open], ["Exposure", usd(m.open_cost)],
+      ["PnL rem Kelly", `<span class="${cls(m.kelly_pnl)}">${sUsd(m.kelly_pnl)}</span>`], ["Status Kelly", scope === "all" ? "per varian ↓" : kellyBadge(m)]];
+    el("md-kv").innerHTML = kv.map(([k, v]) => `<div><div class="k">${k}</div><div class="v">${v}</div></div>`).join("");
+    el("md-wr-bar").style.width = ((m.win_rate || 0) * 100) + "%";
+    el("md-wr-lbl").textContent = m.win_rate == null ? "–" : `${(m.win_rate * 100).toFixed(1)}% (${m.wins}/${m.closed})`;
+  }
+
+  // ---- kurva equity per varian
+  let eqChart, eqSeries = {}, eqPoints = -1;
+  function renderEquity() {
+    const box = el("md-eq-chart"), names = scope === "all" ? S.strategies.filter(n => (S.equity[n] || []).length) : [scope];
+    if (!names.some(n => (S.equity[n] || []).length)) {
+      if (eqChart) { eqChart.remove(); eqChart = null; eqSeries = {}; }
+      box.innerHTML = `<div class="empty">Belum ada posisi yang ditutup.</div>`; el("md-eq-legend").innerHTML = ""; return;
+    }
+    if (!eqChart) { box.innerHTML = ""; eqChart = LightweightCharts.createChart(box, chartOptions()); eqChart.subscribeCrosshairMove(eqLegend); }
+    Object.keys(eqSeries).forEach(n => { if (!names.includes(n)) { eqChart.removeSeries(eqSeries[n]); delete eqSeries[n]; } });
+    names.forEach(n => {
+      if (!eqSeries[n]) eqSeries[n] = eqChart.addLineSeries({ color: color(n), lineWidth: 2, priceLineVisible: false, lastValueVisible: true,
+        priceFormat: { type: "custom", formatter: v => sUsd(v), minMove: 0.01 } });
+      eqSeries[n].setData((S.equity[n] || []).map(([t, v]) => ({ time: t + TZ, value: v })));
+    });
+    const total = names.reduce((t, n) => t + (S.equity[n] || []).length, 0) + names.join().length;
+    if (total !== eqPoints) { eqPoints = total; eqChart.timeScale().fitContent(); }
+    eqLegend(null);
+  }
+  function eqLegend(p) {
+    el("md-eq-legend").innerHTML = Object.keys(eqSeries).map(n => {
+      const d = p && p.seriesData && p.seriesData.get(eqSeries[n]), pts = S.equity[n] || [], v = d ? d.value : pts.length ? pts.at(-1)[1] : null;
+      return `<span><span class="sw" style="background:${color(n)}"></span>${esc(STRAT[n])} <b class="${cls(v)}">${v == null ? "–" : sUsd(v)}</b></span>`;
+    }).join("") + (p && p.time ? `<span>${clock(p.time - TZ)}</span>` : "");
+  }
+
+  // ---- pertumbuhan modal
+  let gChart, gS = {}, gKey = "";
+  function renderGrowth() {
+    const box = el("md-g-chart"), budget = S.stats.batch_budget_usd || 20, nVar = scope === "all" ? Math.max(1, S.strategies.length) : 1, start = budget * nVar;
+    const pts = S.equity[scope] || [], kpts = S.equity_kelly[scope] || [];
+    el("md-g-scope").innerHTML = `<span class="sw" style="background:${color(scope)}"></span>${esc(STRAT[scope])} · modal awal ${usd(start)}${nVar > 1 ? ` (${nVar} × $${budget})` : ""}`;
+    const t0 = pts.length ? pts[0][0] - 60 : null, bal = [], peak = [], dd = [];
+    let hi = start, maxDD = 0;
+    if (t0 != null) { bal.push({ time: t0 + TZ, value: start }); peak.push({ time: t0 + TZ, value: start }); dd.push({ time: t0 + TZ, value: 0 }); }
+    pts.forEach(([t, v]) => { const b = start + v; hi = Math.max(hi, b); const d = hi ? (b - hi) / hi * 100 : 0; maxDD = Math.min(maxDD, d);
+      bal.push({ time: t + TZ, value: b }); peak.push({ time: t + TZ, value: hi }); dd.push({ time: t + TZ, value: d, color: d < -10 ? "rgba(255,93,115,0.75)" : "rgba(255,93,115,0.4)" }); });
+    const kbal = (t0 != null ? [{ time: t0 + TZ, value: start }] : []).concat(kpts.map(([t, v]) => ({ time: t + TZ, value: start + v })));
+    const now = bal.length ? bal.at(-1).value : start, know = kbal.length ? kbal.at(-1).value : start, growth = (now - start) / start;
+    const b = (k, v, c = "") => `<div><div class="k">${k}</div><div class="v ${c}">${v}</div></div>`;
+    el("md-g-stats").innerHTML = b("Saldo", usd(now), cls(now - start)) + b("Pertumbuhan", pct(growth), cls(growth)) + b("Puncak", usd(hi)) +
+      b("Max drawdown", maxDD ? maxDD.toFixed(1) + "%" : "0%", maxDD < 0 ? "neg" : "") + b("Saldo rem Kelly", usd(know), cls(know - start)) + b("Kelly vs tetap", sUsd(know - now), cls(know - now));
+    if (!pts.length) { if (gChart) { gChart.remove(); gChart = null; gS = {}; } box.innerHTML = `<div class="empty">Belum ada posisi yang ditutup untuk ${esc(STRAT[scope])}.</div>`; el("md-g-legend").innerHTML = ""; return; }
+    if (!gChart) {
+      box.innerHTML = ""; gChart = LightweightCharts.createChart(box, chartOptions());
+      const money = { type: "custom", formatter: v => "$" + v.toFixed(2), minMove: 0.01 };
+      gS.dd = gChart.addHistogramSeries({ priceScaleId: "dd", priceFormat: { type: "custom", formatter: v => v.toFixed(1) + "%", minMove: 0.1 }, lastValueVisible: false, priceLineVisible: false });
+      gChart.priceScale("dd").applyOptions({ scaleMargins: { top: 0.78, bottom: 0 }, visible: false });
+      gS.bal = gChart.addAreaSeries({ lineColor: C.cyan, lineWidth: 2, topColor: "rgba(94,242,255,0.3)", bottomColor: "rgba(94,242,255,0.02)", priceFormat: money, priceLineVisible: false });
+      gS.peak = gChart.addLineSeries({ color: C.amber, lineWidth: 1, lineStyle: 1, priceFormat: money, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false });
+      gS.kelly = gChart.addLineSeries({ color: C.violet, lineWidth: 2, lineStyle: 2, priceFormat: money, priceLineVisible: false });
+      gChart.priceScale("right").applyOptions({ scaleMargins: { top: 0.08, bottom: 0.25 } });
+      gS.base = null; gChart.subscribeCrosshairMove(growthLegend);
+    }
+    gS.bal.setData(bal); gS.peak.setData(peak); gS.kelly.setData(kbal); gS.dd.setData(dd);
+    if (gS.base) gS.bal.removePriceLine(gS.base);
+    gS.base = gS.bal.createPriceLine({ price: start, color: C.text2, lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: "MODAL AWAL" });
+    const key = scope + ":" + bal.length; if (key !== gKey) { gKey = key; gChart.timeScale().fitContent(); }
+    gS.last = { bal: now, kelly: know, peak: hi, dd: dd.at(-1).value }; growthLegend(null);
+  }
+  function growthLegend(p) {
+    if (!gS.last) return;
+    const g = s => p && p.seriesData && p.seriesData.get(gS[s]), v = s => (g(s) ? g(s).value : gS.last[s]);
+    el("md-g-legend").innerHTML = `<span><span class="sw" style="background:${C.cyan}"></span>Saldo <b>${usd(v("bal"))}</b></span>` +
+      `<span><span class="sw" style="background:${C.violet}"></span>Rem Kelly <b>${usd(v("kelly"))}</b></span>` +
+      `<span><span class="sw" style="background:${C.amber}"></span>Puncak <b>${usd(v("peak"))}</b></span>` +
+      `<span><span class="sw" style="background:${C.coral}"></span>Drawdown <b class="${v("dd") < 0 ? "neg" : ""}">${v("dd").toFixed(1)}%</b></span>` + (p && p.time ? `<span>${clock(p.time - TZ)}</span>` : "");
+  }
+
+  // ---- feed, matriks, Monte Carlo, puncak
+  function renderFeed() {
+    if (!S.feed.length) { el("md-feed").innerHTML = `<div class="empty">Belum ada transaksi.</div>`; return; }
+    el("md-feed").innerHTML = S.feed.map(f => { const buy = f.side === "BELI", good = !buy && (f.mult ?? 0) >= 1;
+      const bg = buy ? C.cyan : good ? C.kelp : C.coral, detail = buy ? usd(f.usd) : `${x(f.mult)} <span class="mut">${esc(f.reason)}</span>`;
+      return `<div class="row" data-key="${esc(f.strategy + "|" + f.mint)}"><span class="mut">${hms(f.ts)}</span>
+        <span class="side" style="background:${bg}">${buy ? "BELI" : good ? "JUAL+" : "JUAL−"}</span>
+        <span class="st" style="background:${color(f.strategy)}" title="${esc(STRAT[f.strategy])}">${S.variants[f.strategy] ? S.variants[f.strategy].order + 1 : "?"}</span>
+        <span class="sym">${esc(f.symbol)}</span><span>${detail}</span></div>`; }).join("");
+    el("md-feed").querySelectorAll(".row").forEach(r => r.onclick = () => selectCoin(r.dataset.key));
+  }
+  function renderMatrix() {
+    if (!S.strategies.length) { el("md-matrix").innerHTML = `<div class="empty">Belum ada data.</div>`; return; }
+    const all = S.strategies.flatMap(n => S.matrix[n]), max = Math.max(0.01, ...all.map(c => Math.abs(c.pnl)));
+    el("md-matrix").innerHTML = `<table class="matrix"><thead><tr><th>STRATEGI</th>${S.matrix[S.strategies[0]].map(c => `<th style="text-align:center">${c.label}</th>`).join("")}</tr></thead><tbody>` +
+      S.strategies.map(n => `<tr><td title="${esc(STRAT[n])}"><span class="sw" style="background:${color(n)}"></span>${esc(STRAT[n])}</td>` +
+        S.matrix[n].map(c => { const a = c.n ? 0.12 + 0.55 * Math.abs(c.pnl) / max : 0;
+          const bg = c.pnl > 0 ? `rgba(77,255,168,${a})` : c.pnl < 0 ? `rgba(255,93,115,${a})` : "rgba(94,242,255,0.03)";
+          return `<td class="cell" style="background:${bg}">${c.n ? sUsd(c.pnl) : "–"}<span>${c.n}p · ${c.win_rate == null ? "–" : (c.win_rate * 100).toFixed(0) + "%"}</span></td>`; }).join("") + `</tr>`).join("") + `</tbody></table>`;
+  }
+  function rng(seed) { return () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+  function renderMC() {
+    const rets = S.returns[scope] || [], coins = S.stats.coins_per_batch || 20, per = (S.stats.batch_budget_usd || 20) / coins;
+    el("md-mc-r").innerHTML = `<span class="sw" style="background:${color(scope)}"></span>${esc(STRAT[scope])} · ${rets.length} sampel`;
+    if (rets.length < 10) { el("md-mc").innerHTML = `<div class="empty">Butuh minimal 10 posisi selesai (sekarang ${rets.length}).</div>`; return; }
+    const R = rng(42 + rets.length), N = 5000, out = new Float64Array(N);
+    for (let i = 0; i < N; i++) { let s = 0; for (let j = 0; j < coins; j++) s += per * (rets[Math.floor(R() * rets.length)] - 1); out[i] = s; }
+    const sorted = Array.from(out).sort((a, b) => a - b), q = p => sorted[Math.min(N - 1, Math.floor(p * N))];
+    const lo = sorted[0], hi = sorted[N - 1], bins = 36, w = (hi - lo) / bins || 1, counts = new Array(bins).fill(0);
+    out.forEach(v => counts[Math.min(bins - 1, Math.floor((v - lo) / w))]++);
+    const cmax = Math.max(...counts), W = 400, H = 150, bw = W / bins;
+    const bars = counts.map((c, i) => { const mid = lo + (i + 0.5) * w, h = c / cmax * (H - 18);
+      return `<rect x="${i * bw + 1}" y="${H - 14 - h}" width="${bw - 2}" height="${h}" rx="1.5" fill="${mid >= 0 ? C.kelp : C.coral}" opacity="0.85"><title>${sUsd(lo + i * w)} s/d ${sUsd(lo + (i + 1) * w)}: ${c} putaran</title></rect>`; }).join("");
+    const zx = lo < 0 && hi > 0 ? (-lo / (hi - lo)) * W : null;
+    const zero = zx == null ? "" : `<line x1="${zx}" x2="${zx}" y1="0" y2="${H - 14}" stroke="${C.text2}" stroke-dasharray="3 3"/><text x="${zx}" y="10" fill="${C.text2}" font-size="9" text-anchor="middle">impas</text>`;
+    const pWin = out.filter(v => v > 0).length / N;
+    el("md-mc").innerHTML = `<svg viewBox="0 0 ${W} ${H}" width="100%" style="display:block;filter:drop-shadow(0 0 6px rgba(94,242,255,.15))" font-family="JetBrains Mono">${bars}${zero}
+        <text x="0" y="${H - 2}" fill="${C.muted}" font-size="9">${sUsd(lo)}</text><text x="${W}" y="${H - 2}" fill="${C.muted}" font-size="9" text-anchor="end">${sUsd(hi)}</text></svg>
+      <div class="md-mcs"><div><div class="k">Peluang putaran untung</div><div class="v ${pWin >= 0.5 ? "pos" : "neg"}">${(pWin * 100).toFixed(1)}%</div></div>
+        <div><div class="k">Median hasil / putaran</div><div class="v ${cls(q(0.5))}">${sUsd(q(0.5))}</div></div>
+        <div><div class="k">Skenario buruk (5%)</div><div class="v ${cls(q(0.05))}">${sUsd(q(0.05))}</div></div>
+        <div><div class="k">Skenario bagus (95%)</div><div class="v ${cls(q(0.95))}">${sUsd(q(0.95))}</div></div></div>`;
+  }
+  function renderPeaks() {
+    const b = S.peaks[scope] || [];
+    if (!b.length || !b.some(r => r.count)) { el("md-peaks").innerHTML = `<div class="empty">Belum ada data.</div>`; return; }
+    const max = Math.max(1, ...b.map(r => r.count));
+    el("md-peaks").innerHTML = `<div class="md-bars">` + b.map(r => `<span class="l">${r.label}</span><span class="b"><i style="width:${r.count / max * 100}%;background:${color(scope)};box-shadow:0 0 8px ${color(scope)}"></i></span><span class="c">${r.count}</span>`).join("") + `</div>`;
+  }
+
+  // ---- tabel posisi
+  document.querySelectorAll(".md-tab").forEach(b => b.onclick = () => {
+    tab = b.dataset.tab; document.querySelectorAll(".md-tab").forEach(t => t.setAttribute("aria-selected", t === b)); renderTable();
+  });
+  async function renderTable() {
+    const box = el("md-table");
+    if (tab === "batches") {
+      box.innerHTML = S.batches.length ? `<table><thead><tr><th>SELESAI</th><th>STRATEGI</th><th>PUTARAN</th><th class="num">MODAL</th><th class="num">KEMBALI</th><th class="num">HASIL</th><th class="num">DURASI</th></tr></thead><tbody>` +
+        S.batches.map(r => `<tr><td>${clock(r.ended)}</td><td><span class="sw" style="background:${color(r.strategy)}"></span>${esc(STRAT[r.strategy])}</td><td>#${r.batch}</td>
+          <td class="num">${usd(r.invested)}</td><td class="num">${usd(r.returned)}</td><td class="num ${cls(r.pnl)}">${arrow(r.pnl)} ${sUsd(r.pnl)} (${pct(r.pnl / r.invested)})</td>
+          <td class="num">${dur(r.ended - r.started)}</td></tr>`).join("") + `</tbody></table>` : `<div class="empty">Belum ada putaran yang selesai.</div>`;
+      return;
+    }
+    const rows = await api(`/api/positions?status=${tab}`);
+    if (!rows.length) { box.innerHTML = `<div class="empty">${tab === "open" ? "Tidak ada koin yang sedang dipegang." : "Belum ada posisi yang ditutup."}</div>`; return; }
+    const key = r => r.strategy + "|" + r.mint, sw = r => `<span class="sw" style="background:${color(r.strategy)}"></span>${esc(STRAT[r.strategy])}`;
+    box.innerHTML = tab === "open"
+      ? `<table class="pick"><thead><tr><th>KOIN</th><th>STRATEGI</th><th>DIBELI</th><th class="num">SEKARANG</th><th class="num">PUNCAK</th><th class="num">SUDAH DIJUAL</th></tr></thead><tbody>` +
+        rows.map(r => { const d = (r.mult ?? 1) - 1; return `<tr data-key="${esc(key(r))}" class="${selected === key(r) ? "sel" : ""}"><td><b>${esc(r.symbol)}</b></td><td>${sw(r)}</td>
+          <td>${agoM(r.opened)}</td><td class="num ${cls(d)}">${arrow(d)} ${x(r.mult)}</td><td class="num">${x(r.peak_mult)}</td><td class="num">${r.sold_usd ? usd(r.sold_usd) : "–"}</td></tr>`; }).join("") + `</tbody></table>`
+      : `<table class="pick"><thead><tr><th>KOIN</th><th>STRATEGI</th><th>DITUTUP</th><th class="num">MODAL</th><th class="num">KEMBALI</th><th class="num">HASIL</th><th class="num">PUNCAK</th><th>ALASAN</th></tr></thead><tbody>` +
+        rows.map(r => `<tr data-key="${esc(key(r))}" class="${selected === key(r) ? "sel" : ""}"><td><b>${esc(r.symbol)}</b>${r.graduated ? ' <span class="tag t-meme">DEX</span>' : ""}</td><td>${sw(r)}</td>
+          <td>${clock(r.closed)}</td><td class="num">${usd(r.cost_usd)}</td><td class="num">${usd(r.proceeds_usd)}</td><td class="num ${cls(r.pnl_usd)}">${arrow(r.pnl_usd)} ${x(r.ret_mult)}</td>
+          <td class="num">${x(r.peak_mult)}</td><td>${esc(r.reason)}</td></tr>`).join("") + `</tbody></table>`;
+    box.querySelectorAll("tbody tr[data-key]").forEach(tr => tr.onclick = () => selectCoin(tr.dataset.key));
+  }
+
+  // ---- chart koin
+  let coinChart, coinSeries, coinData, coinMode = "15";   // mode chart: detik per candle, atau "line"
+  function selectCoin(key) {
+    selected = key;
+    document.querySelectorAll(".md-table tr.sel").forEach(t => t.classList.remove("sel"));
+    document.querySelectorAll(`.md-table tr[data-key="${CSS.escape(key)}"]`).forEach(t => t.classList.add("sel"));
+    loadCoin(); el("md-coin-chart").scrollIntoView({ behavior: "smooth", block: "center" });
+  }
+  function fitCoinChart(chart, el, n, candle) {   // candle sedikit: lebar tetap & rata kanan, bukan diregangkan selebar panel
+    const ts = chart.timeScale();
+    if (candle && n * 12 < el.clientWidth) { ts.applyOptions({ barSpacing: 12, rightOffset: 3 }); ts.scrollToRealTime(); }
+    else { ts.applyOptions({ rightOffset: 0 }); ts.fitContent(); }
+  }
+  function memeCandles(d, sec) {   // titik harga rekaman bot -> candle OHLC (kelipatan dari harga beli)
+    const pts = d.prices.map(([t, pr]) => [t, pr / d.entry]);
+    d.trades.forEach(t => pts.push([t.ts, t.side === "BELI" ? 1 : t.price_sol / d.entry]));
+    pts.sort((a, b) => a[0] - b[0]);
+    const out = [];
+    for (const [t, v] of pts) {
+      const b = Math.floor(t / sec) * sec, cur = out.at(-1);
+      if (!cur || cur.b !== b) out.push({ b, open: cur ? cur.close : v, high: Math.max(v, cur ? cur.close : v), low: Math.min(v, cur ? cur.close : v), close: v });
+      else { cur.high = Math.max(cur.high, v); cur.low = Math.min(cur.low, v); cur.close = v; }
+    }
+    return out.map(c => ({ time: c.b + TZ, open: c.open, high: c.high, low: c.low, close: c.close }));
+  }
+    document.querySelectorAll("#md-coin-tf button").forEach(b => b.onclick = () => {
+    coinMode = b.dataset.m; document.querySelectorAll("#md-coin-tf button").forEach(x => x.setAttribute("aria-pressed", x === b)); loadCoin();
+  });
+  async function loadCoin() {
+    if (!selected) { const open = (S.feed || []).find(f => f.side === "BELI"); if (!open) return; selected = open.strategy + "|" + open.mint; }
+    const [strategy, mint] = selected.split("|");
+    const d = await api(`/api/coin?mint=${encodeURIComponent(mint)}&strategy=${encodeURIComponent(strategy)}`);
+    if (!d.mint) return;
+    coinData = d; const p = d.position;
+    el("md-coin-title").innerHTML = `CHART · <b style="color:var(--text)">${esc(d.symbol)}</b> <span class="sw" style="background:${color(strategy)};margin-left:6px"></span>${esc(STRAT[strategy])} ` +
+      (p ? `<span class="tag t-meme">DITUTUP: ${esc(p.reason)}</span> <span class="${cls(p.pnl_usd)}">${arrow(p.pnl_usd)} ${x(p.ret_mult)}</span>` : `<span class="tag t-meme">DIPEGANG</span>`);
+    el("md-coin-links").innerHTML = `<a href="https://pump.fun/coin/${encodeURIComponent(mint)}" target="_blank" rel="noopener noreferrer">pump.fun ↗</a> · <a href="https://dexscreener.com/solana/${encodeURIComponent(mint)}" target="_blank" rel="noopener noreferrer">dexscreener ↗</a>`;
+    const pts = new Map();
+    d.prices.forEach(([t, pr]) => pts.set(Math.floor(t), pr / d.entry));
+    d.trades.forEach(t => pts.set(Math.floor(t.ts), t.side === "BELI" ? 1 : t.price_sol / d.entry));
+    const data = [...pts.entries()].sort((a, b) => a[0] - b[0]).map(([t, v]) => ({ time: t + TZ, value: v }));
+    const candle = coinMode !== "line", sec = candle ? +coinMode : 0;
+    const box = el("md-coin-chart");
+    if (!coinChart) { box.innerHTML = ""; coinChart = LightweightCharts.createChart(box, chartOptions()); coinChart.subscribeCrosshairMove(coinLegend); }
+    if (coinSeries) coinChart.removeSeries(coinSeries);
+    let nBars = data.length;
+    const up = (data.at(-1)?.value ?? 1) >= 1, xfmt = { type: "custom", formatter: v => v.toFixed(2) + "x", minMove: 0.01 };
+    if (candle) {
+      coinSeries = coinChart.addCandlestickSeries({ upColor: C.kelp, downColor: C.coral, borderUpColor: C.kelp, borderDownColor: C.coral,
+        wickUpColor: C.kelp, wickDownColor: C.coral, priceLineVisible: false, priceFormat: xfmt });
+      const cd = memeCandles(d, sec); coinSeries.setData(cd); nBars = cd.length;
+    } else {
+      coinSeries = coinChart.addAreaSeries({ lineColor: up ? C.kelp : C.coral, lineWidth: 2,
+        topColor: up ? "rgba(77,255,168,0.28)" : "rgba(255,93,115,0.28)", bottomColor: "rgba(0,0,0,0)", priceLineVisible: false, priceFormat: xfmt });
+      coinSeries.setData(data);
+    }
+    [[1, C.text2, "BELI"], [d.rules.stop_loss, C.coral, "SL"], [d.rules.tp1, C.kelp, "TP1"], [d.rules.tp2, C.kelp, "TP2"]]
+      .filter(([price]) => price != null).forEach(([price, c, title]) => coinSeries.createPriceLine({ price, color: c, lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title }));
+    coinSeries.setMarkers(d.trades.map(t => { const buy = t.side === "BELI", m = buy ? 1 : t.price_sol / d.entry;
+      return { time: (candle ? Math.floor(t.ts / sec) * sec : Math.floor(t.ts)) + TZ, position: buy ? "belowBar" : "aboveBar", shape: buy ? "arrowUp" : "arrowDown",
+        color: buy ? C.cyan : m >= 1 ? C.kelp : C.coral, text: buy ? "BELI" : "JUAL " + (t.reason || "") }; }));
+    fitCoinChart(coinChart, box, nBars, candle); coinLegend(null);
+  }
+  function coinLegend(p) {
+    if (!coinData || !coinSeries) return;
+    const d = p && p.seriesData && p.seriesData.get(coinSeries), last = coinData.prices.at(-1);
+    const v = d ? (d.close ?? d.value) : last ? last[1] / coinData.entry : 1, mcap = coinData.sol_usd ? v * coinData.entry * 1e9 * coinData.sol_usd : null;
+    el("md-coin-legend").innerHTML = `<span>${d ? clock(d.time - TZ) : "TERAKHIR"}</span><span>HARGA <b class="${cls(v - 1)}">${x(v)}</b> dari harga beli</span>` +
+      (d && d.open != null ? `<span>O <b>${x(d.open)}</b> H <b>${x(d.high)}</b> L <b>${x(d.low)}</b> C <b>${x(d.close)}</b></span>` : "") +
+      (mcap ? `<span>MCAP ≈ <b>$${mcap >= 1e6 ? (mcap / 1e6).toFixed(2) + "M" : mcap >= 1000 ? (mcap / 1000).toFixed(1) + "k" : mcap.toFixed(0)}</b></span>` : "") +
+      `<span>${coinData.prices.length} titik harga</span>`;
+  }
+
+  function render() {
+    if (!S) return;
+    renderScopes(); TICKER.update(tickerItems()); renderHero(); renderLab(); renderEquity(); renderGrowth(); renderFeed();
+    renderMatrix(); renderMC(); renderPeaks();
+    renderTable().catch(() => {}); loadCoin().catch(() => {});   // server sedang restart: coba lagi di siklus berikutnya
+  }
+  async function refresh() {
+    try { S = await api("/api/summary"); if (scope !== "all" && !S.strategies.includes(scope)) scope = "all"; render(); }
+    catch (e) { /* server sibuk: coba lagi di siklus berikutnya */ }
+  }
+  refresh(); setInterval(refresh, 10000);
+  return { refresh };
+})();
+</script>
+</body>
+</html>

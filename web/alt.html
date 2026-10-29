@@ -83,6 +83,17 @@ tbody tr:hover { background: var(--panel-2); }
 .foot { color: var(--muted); font-size: 11px; margin-top: 12px; }
 .bar { height: 6px; background: var(--line); border-radius: 3px; overflow: hidden; min-width: 60px; }
 .bar i { display: block; height: 100%; }
+.themes { display: inline-flex; border: 1px solid var(--line-2); border-radius: 4px; overflow: hidden; }
+.themes span { color: var(--muted); padding: 3px 7px; font-size: 10px; letter-spacing: .1em; border-right: 1px solid var(--line-2); }
+.themes a { padding: 3px 9px; color: var(--text-2); font-size: 11px; }
+.themes a.on { background: var(--cyan); color: #06121a; font-weight: 700; }
+.themes a:not(.on):hover { background: var(--panel-2); color: var(--text); }
+.tfs { display: inline-flex; gap: 3px; margin-left: 6px; }
+.tfs button { font: 600 10px var(--mono); color: var(--text-2); background: var(--panel-2); border: 1px solid var(--line-2); border-radius: 3px; padding: 1px 7px; cursor: pointer; letter-spacing: .06em; }
+.tfs button[aria-pressed="true"] { background: var(--cyan); color: #06121a; border-color: var(--cyan); font-weight: 700; }
+.coin-chart { height: clamp(300px, 40vh, 480px); }
+.pick tbody tr { cursor: pointer; }
+tr.sel { background: rgba(34,211,238,.1) !important; box-shadow: inset 3px 0 0 var(--cyan); }
 </style>
 </head>
 <body>
@@ -92,6 +103,7 @@ tbody tr:hover { background: var(--panel-2); }
     <div class="brand"><b>ALTCOIN × QUANT</b><div>TOP 30 + WATCHLIST · SPOT + FUTURES · PAPER TRADING</div></div>
     <span class="sim-badge">SIMULASI</span>
     <a class="chip" href="/">← MEMECOIN</a>
+    <span class="themes" title="Ganti tema tampilan (data sama)"><span>TEMA</span><a href="/alt" class="on">TERMINAL</a><a href="/alt-abyss">ABYSS</a></span>
     <div class="grow"></div>
     <span class="chip"><span class="live" id="live"></span><span id="live-txt">MEMUAT</span></span>
     <span class="chip">BTC <b id="btc">–</b></span>
@@ -124,6 +136,14 @@ tbody tr:hover { background: var(--panel-2); }
     <section class="panel span-5">
       <div class="ph"><span class="ix">03</span> POSISI TERBUKA <span class="r" id="open-r"></span></div>
       <div class="table-wrap" id="open" style="max-height: 440px"></div>
+    </section>
+
+    <section class="panel span-12">
+      <div class="ph"><span class="ix">06</span> <span id="cc-title">CHART KOIN</span>
+        <span class="tfs" id="cc-tf"><button data-tf="1h" aria-pressed="true">1 JAM</button><button data-tf="4h" aria-pressed="false">4 JAM</button><button data-tf="1d" aria-pressed="false">1 HARI</button></span>
+        <span class="r" id="cc-links"></span></div>
+      <div class="legend" id="cc-legend">Klik koin di tabel posisi, pasar, atau transaksi untuk melihat chart-nya.</div>
+      <div class="coin-chart" id="cc-chart"></div>
     </section>
 
     <section class="panel span-8">
@@ -230,7 +250,7 @@ function renderOpen() {
   document.getElementById("open-r").textContent = `${rows.length} posisi`;
   if (!rows.length) { el.innerHTML = `<div class="empty">Belum ada posisi. Strategi menunggu sinyal masuk<br>(dicek setiap candle 1 jam / 4 jam tertutup).</div>`; return; }
   el.innerHTML = `<table><thead><tr><th>KOIN</th><th>ARAH</th><th>STRATEGI</th><th class="num">MASUK</th><th class="num">SEKARANG</th><th class="num">HASIL</th><th class="num">STOP</th><th class="num">LIKUIDASI</th><th class="num">UMUR</th></tr></thead><tbody>` +
-    rows.map(o => `<tr><td><b>${esc(o.symbol.replace(/USDT$/, ""))}</b></td><td>${dirTag(o)}</td>
+    rows.map(o => `<tr data-sym="${esc(o.symbol)}"><td><b>${esc(o.symbol.replace(/USDT$/, ""))}</b></td><td>${dirTag(o)}</td>
       <td><span class="sw" style="background:${color(o.strategy)}"></span>${esc(label(o.strategy))}</td>
       <td class="num">${px(o.entry)}</td><td class="num">${px(o.price)}</td>
       <td class="num ${cls(o.ret_pct)}"><b>${pct(o.ret_pct, 2)}</b></td>
@@ -244,7 +264,7 @@ function renderMarket() {
     <div class="bar" style="width:60px"><i style="width:${r}%;background:${r < 30 ? css("--green") : r > 70 ? css("--red") : css("--text-2")}"></i></div></div>`;
   document.getElementById("market").innerHTML = `<table><thead><tr><th>#</th><th>KOIN</th><th class="num">HARGA</th><th class="num">24J</th>
     <th class="num">RSI 1J</th><th>TREN 1J</th><th>TREN 4J</th><th>DIPEGANG</th></tr></thead><tbody>` +
-    S.market.map(m => `<tr><td class="mut">${m.rank ?? "–"}</td>
+    S.market.map(m => `<tr data-sym="${esc(m.symbol)}"><td class="mut">${m.rank ?? "–"}</td>
       <td><b>${esc(m.base)}</b> ${m.watch ? `<span class="tag t-watch">INCARAN</span>` : ""}</td>
       <td class="num">${px(m.price)}</td><td class="num ${cls(m.chg24)}">${pct(m.chg24, 2)}</td>
       <td class="num">${rsiBar(m.rsi1h)}</td><td>${trend(m.trend1h)}</td><td>${trend(m.trend4h)}</td>
@@ -258,7 +278,7 @@ function renderFeed() {
   el.innerHTML = rows.map(f => { const buy = f.side === "BELI", good = !buy && (f.ret ?? 0) >= 1, fut = (f.lev || 1) > 1;
     const openTxt = !fut ? "BELI" : f.dir < 0 ? "SHORT" : "LONG", closeTxt = (fut ? "TUTUP" : "JUAL") + (good ? "+" : "-");
     const openCol = !fut ? css("--cyan") : f.dir < 0 ? css("--a5") : css("--green");
-    return `<div class="row"><span class="mut">${hms(f.ts)}</span>
+    return `<div class="row" data-sym="${esc(f.symbol)}" style="cursor:pointer"><span class="mut">${hms(f.ts)}</span>
       <span class="side" style="background:${buy ? openCol : good ? css("--green") : css("--red")}">${buy ? openTxt : closeTxt}</span>
       <span><b>${esc(f.symbol.replace(/USDT$/, ""))}</b> <span class="mut">${esc(label(f.strategy))}</span></span>
       <span>${buy ? usd(f.usd) : `<b class="${cls((f.ret ?? 1) - 1)}">${pct(((f.ret ?? 1) - 1) * 100)}</b> <span class="mut">${esc(f.reason)}</span>`}</span></div>`; }).join("");
@@ -297,7 +317,7 @@ async function refresh() {
       document.getElementById("lb").innerHTML = `<div class="empty">Simulator altcoin belum berjalan. Jalankan <b>altcoin.bat</b> atau <b>mulai_semua.bat</b>.</div>`;
       return;
     }
-    renderTop(); renderKpis(); renderLb(); renderAi(); renderEquity(); renderOpen(); renderMarket(); renderFeed();
+    renderTop(); renderKpis(); renderLb(); renderAi(); renderEquity(); renderOpen(); renderMarket(); renderFeed(); CC.render();
   } catch (e) {
     document.getElementById("live").className = "live off";
     document.getElementById("live-txt").textContent = "SERVER DASHBOARD TIDAK MERESPONS";
@@ -305,6 +325,75 @@ async function refresh() {
 }
 setInterval(() => document.getElementById("clock").textContent = new Date().toLocaleTimeString("id-ID", { hour12: false }), 1000);
 refresh(); setInterval(refresh, 10000);
+
+// ================= chart candlestick per koin (data publik Binance langsung dari browser)
+const CC = (() => {
+  let symbol = null, tf = "1h", chart, candles, lines = [], lastKey = "", last = null, nTrades = 0;
+  const TFSEC = { "1h": 3600, "4h": 14400, "1d": 86400 };
+  document.querySelectorAll("#cc-tf button").forEach(b => b.onclick = () => {
+    tf = b.dataset.tf; document.querySelectorAll("#cc-tf button").forEach(x => x.setAttribute("aria-pressed", x === b)); lastKey = ""; load().catch(() => {});
+  });
+  function select(sym) { symbol = sym; lastKey = ""; mark(); load().catch(() => {}); document.getElementById("cc-chart").scrollIntoView({ behavior: "smooth", block: "center" }); }
+  function mark() {
+    document.querySelectorAll("tr.sel").forEach(t => t.classList.remove("sel"));
+    if (symbol) document.querySelectorAll(`tr[data-sym="${CSS.escape(symbol)}"]`).forEach(t => t.classList.add("sel"));
+  }
+  function bind() {
+    document.querySelectorAll("#open tbody tr[data-sym], #market tbody tr[data-sym], #feed .row[data-sym]").forEach(r => {
+      r.onclick = () => select(r.dataset.sym);
+      if (r.tagName === "TR") r.closest("table").classList.add("pick");
+    });
+  }
+  async function load() {
+    if (!symbol) { const o = S.open.find(o => o.strategy !== "hodl_btc"); symbol = o ? o.symbol : "BTCUSDT"; mark(); }
+    const base = symbol.replace(/USDT$/, ""), m = S.market.find(x => x.symbol === symbol);
+    document.getElementById("cc-title").innerHTML = `CHART · <b style="color:var(--text)">${esc(base)}</b> ${m && m.watch ? `<span class="tag t-watch">INCARAN</span>` : ""}`;
+    document.getElementById("cc-links").innerHTML = `<a href="https://www.binance.com/en/trade/${encodeURIComponent(base)}_USDT" target="_blank" rel="noopener noreferrer">binance ↗</a> · <a href="https://www.tradingview.com/chart/?symbol=BINANCE:${encodeURIComponent(symbol)}" target="_blank" rel="noopener noreferrer">tradingview ↗</a>`;
+    const [kl, info] = await Promise.all([
+      fetch(`https://data-api.binance.vision/api/v3/klines?symbol=${encodeURIComponent(symbol)}&interval=${tf}&limit=300`).then(r => r.json()),
+      fetch(`/api/alt/coin?symbol=${encodeURIComponent(symbol)}`, { cache: "no-store" }).then(r => r.json())]);
+    if (!Array.isArray(kl) || !kl.length) { document.getElementById("cc-legend").textContent = "Data candle tidak tersedia untuk koin ini."; return; }
+    const data = kl.map(k => ({ time: Math.floor(k[0] / 1000) + TZ, open: +k[1], high: +k[2], low: +k[3], close: +k[4] }));
+    if (!chart) {
+      chart = LightweightCharts.createChart(document.getElementById("cc-chart"), { autoSize: true,
+        layout: { background: { type: "solid", color: css("--panel") }, textColor: css("--muted"), fontFamily: css("--mono"), fontSize: 11 },
+        grid: { vertLines: { color: "rgba(255,255,255,0.03)" }, horzLines: { color: css("--line") } },
+        rightPriceScale: { borderColor: css("--line-2") }, timeScale: { borderColor: css("--line-2"), timeVisible: true, secondsVisible: false },
+        crosshair: { vertLine: { color: css("--line-2"), labelBackgroundColor: css("--panel-2") }, horzLine: { color: css("--line-2"), labelBackgroundColor: css("--panel-2") } } });
+      candles = chart.addCandlestickSeries({ upColor: css("--green"), downColor: css("--red"), borderUpColor: css("--green"), borderDownColor: css("--red"),
+        wickUpColor: css("--green"), wickDownColor: css("--red") });
+      chart.subscribeCrosshairMove(legend);
+    }
+    candles.setData(data);
+    candles.applyOptions({ priceFormat: { type: "custom", formatter: v => px(v), minMove: Math.pow(10, -Math.max(2, Math.ceil(-Math.log10(data.at(-1).close)) + 3)) } });
+    lines.forEach(l => candles.removePriceLine(l)); lines = [];
+    for (const o of info.open) {
+      const fut = o.liq > 0, nm = label(o.strategy).slice(0, 14);
+      lines.push(candles.createPriceLine({ price: o.entry, color: color(o.strategy), lineWidth: 1, lineStyle: 0, axisLabelVisible: true, title: (fut ? (o.side > 0 ? "LONG " : "SHORT ") : "MASUK ") + nm }));
+      if (o.stop > 0) lines.push(candles.createPriceLine({ price: o.stop, color: css("--red"), lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: "STOP" }));
+      if (fut) lines.push(candles.createPriceLine({ price: o.liq, color: css("--orange"), lineWidth: 1, lineStyle: 1, axisLabelVisible: true, title: "LIKUIDASI" }));
+    }
+    const step = TFSEC[tf], t0 = data[0].time - TZ;
+    candles.setMarkers(info.trades.filter(t => t.ts >= t0).map(t => {
+      const open = t.side === "BELI", fut = (t.lev || 1) > 1, short = fut && t.dir < 0;
+      return { time: Math.floor(t.ts / step) * step + TZ, position: (open && !short) || (!open && short) ? "belowBar" : "aboveBar",
+        shape: open ? (short ? "arrowDown" : "arrowUp") : "circle", color: open ? (short ? css("--orange") : fut ? css("--green") : css("--cyan")) : css("--amber"),
+        text: open ? (fut ? (short ? "SHORT" : "LONG") : "BELI") : (fut ? "TUTUP" : "JUAL") };
+    }).sort((a, b) => a.time - b.time));
+    const key = symbol + tf;
+    if (key !== lastKey) { lastKey = key; chart.timeScale().fitContent(); }
+    last = data.at(-1); nTrades = info.trades.length; legend(null);
+  }
+  function legend(p) {
+    const d = p && p.seriesData && candles ? p.seriesData.get(candles) : last;
+    if (!d) return;
+    const chg = (d.close / d.open - 1) * 100;
+    document.getElementById("cc-legend").innerHTML = `<span>${p && p.time ? dt(p.time - TZ) : "TERAKHIR"}</span><span>O <b>${px(d.open)}</b></span><span>H <b>${px(d.high)}</b></span>` +
+      `<span>L <b>${px(d.low)}</b></span><span>C <b class="${cls(chg)}">${px(d.close)}</b></span><span class="${cls(chg)}">${pct(chg, 2)}</span><span>${nTrades} transaksi simulasi di koin ini</span>`;
+  }
+  function render() { if (!S) return; bind(); mark(); load().catch(() => {}); }
+  return { render, select };
+})();
 </script>
 </body>
 </html>

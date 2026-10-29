@@ -28,8 +28,28 @@ The project is documented in Bahasa Indonesia in [docs/PANDUAN.md](docs/PANDUAN.
 | **Meme ML trainer** (`meme_ai.py`) | Replays each variant's exit rules over the recorded price paths with fees, dynamic slippage and network costs. It then trains a gradient-boosting classifier on entry-time features only and evaluates it walk-forward. |
 | **Altcoin and futures simulator** (`altcoin.py`) | Covers the top 30 coins by market cap plus a watchlist. It runs **spot** strategies (EMA trend, breakout, RSI dip, 4h swing) and **perpetual futures** with leverage, long and short, isolated-margin **liquidation** and real **funding rates** (OKX). A daily backtest is shared with the live engine, and HODL BTC is the benchmark. |
 | **Futures AI** (`alt_ai.py`) | Gradient boosting on 18 candle and market-regime features predicts 12-hour direction (up, flat or down, scaled by ATR). It is retrained daily. **Safety gate:** it may only trade a direction that was proven out-of-sample (≥200 signals, >50% hit rate, mean > costs). |
-| **Dashboard** (`dashboard.py`, `web/`) | A real-time terminal-style web UI with live equity curves, a per-coin chart with trade markers, an animated execution pipeline with pixel-art characters, the strategy leaderboard and the AI training report. |
+| **Dashboard** (`dashboard.py`, `web/`) | A real-time web UI in **two themes** (see below): live equity curves, per-coin candlestick charts with trade markers, an animated execution pipeline, the strategy leaderboard, Monte Carlo risk, and the AI training report. |
 | **Telegram bot** | Sends trade alerts, round summaries, and the `/status`, `/laporan`, `/stop`, `/mulai` and `/alt` commands. |
+
+## Themes
+The same data powers two complete themes. Each page has a **THEME: TERMINAL | ABYSS** switch, and moving between meme coins and altcoins keeps the current theme.
+
+| | Terminal | Abyss (deep sea) |
+|---|---|---|
+| Meme coins | `/` with the pixel trader "Momo" | `/lab` command center with a data-carrying **crab** |
+| Altcoins & futures | `/alt` | `/alt-abyss` with an **octopus** that holds every open position |
+
+The Abyss characters are procedural canvas animations, not sprites:
+- The **crab** walks on 8 legs with inverse kinematics. Each foot stays planted and steps only when the body moves too far, alternating between leg groups. The crab carries data between pipeline stages and leaves glowing threads behind. It reacts to winning and losing trades, follows the cursor, and has idle behaviours: digging for pearls, dancing, blowing bubbles, sleeping.
+- The **octopus** grabs each open position with a FABRIK-IK tentacle that stretches to reach it. Its skin colour follows the average PnL of open positions. It releases coins when positions close: winners float up and losers sink.
+
+Charts are candlesticks in both themes. Meme-coin candles (15 s / 1 m / 5 m) are built from the bot's own bonding-curve price samples. Altcoin candles (1 h / 4 h / 1 d) come from Binance and include entry, stop and liquidation lines.
+
+![Abyss command center](docs/screenshots/abyss-command-center.png)
+
+| Abyss altcoin chart & result matrix |
+|---|
+| ![Abyss altcoin chart](docs/screenshots/abyss-altcoin-chart.png) |
 
 ## Architecture
 
