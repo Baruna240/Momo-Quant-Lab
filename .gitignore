@@ -1,0 +1,18 @@
+# rahasia: JANGAN PERNAH di-commit
+.env
+
+# data & hasil runtime
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+backups/
+models/
+*.pkl
+*.log
+
+# python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/

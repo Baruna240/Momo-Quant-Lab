@@ -1,0 +1,310 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Altcoin Quant Terminal</title>
+<script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
+<style>
+:root {
+  color-scheme: dark;
+  --bg: #07090c; --panel: #0e1217; --panel-2: #121821; --line: #1d2530; --line-2: #2a3442;
+  --text: #dfe5ec; --text-2: #9aa6b4; --muted: #5f6b7a;
+  --amber: #f5c542; --cyan: #22d3ee; --green: #22c55e; --red: #ef4444; --orange: #f97316;
+  --a0: #3987e5; --a1: #d95926; --a2: #199e70; --a3: #9085e9; --a4: #f5c542;
+  --a5: #e879f9; --a6: #fb7185; --a7: #2dd4bf; --a8: #a3e635;
+  --mono: ui-monospace, "Cascadia Mono", "JetBrains Mono", Consolas, "Courier New", monospace;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--bg); color: var(--text); }
+body { font: 12px/1.45 var(--mono); }
+a { color: var(--cyan); text-decoration: none; }
+.wrap { width: 100%; padding: 10px 12px 32px; }
+.top { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; padding: 8px 12px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 6px; margin-bottom: 10px; }
+.logo { width: 26px; height: 26px; border-radius: 5px; background: var(--cyan); color: #111; display: grid;
+  place-items: center; font-weight: 800; font-size: 15px; }
+.brand b { font-size: 14px; letter-spacing: .08em; }
+.brand div { color: var(--muted); font-size: 10px; letter-spacing: .12em; }
+.sim-badge { color: #0b0b0b; background: var(--orange); padding: 1px 6px; border-radius: 3px; font-weight: 700; font-size: 10px; letter-spacing: .1em; }
+.grow { flex: 1; }
+.chip { display: inline-flex; align-items: center; gap: 6px; padding: 3px 8px; border: 1px solid var(--line-2);
+  border-radius: 4px; color: var(--text-2); white-space: nowrap; }
+.chip b { color: var(--text); }
+.live { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); }
+.live.on { background: var(--green); box-shadow: 0 0 8px var(--green); animation: pulse 1.6s infinite; }
+.live.off { background: var(--red); }
+@keyframes pulse { 50% { opacity: .35; } }
+.clock { font-size: 18px; font-weight: 700; letter-spacing: .04em; }
+.grid { display: grid; grid-template-columns: repeat(12, 1fr); gap: 10px; }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 10px 12px; min-width: 0; }
+.span-4 { grid-column: span 4; } .span-5 { grid-column: span 5; } .span-7 { grid-column: span 7; }
+.span-8 { grid-column: span 8; } .span-12 { grid-column: span 12; }
+@media (max-width: 1100px) { .span-4, .span-5, .span-7, .span-8 { grid-column: span 12; } }
+.ph { display: flex; align-items: center; gap: 8px; margin: -2px 0 8px; color: var(--text-2); font-size: 10.5px;
+  letter-spacing: .12em; text-transform: uppercase; }
+.ph .ix { color: var(--cyan); }
+.ph .r { margin-left: auto; color: var(--muted); letter-spacing: .06em; text-transform: none; }
+.empty { color: var(--muted); text-align: center; padding: 24px 0; }
+.pos { color: var(--green); } .neg { color: var(--red); } .neu { color: var(--amber); } .mut { color: var(--muted); }
+.table-wrap { overflow: auto; }
+table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+th { position: sticky; top: 0; background: var(--panel); color: var(--muted); font-weight: 600; font-size: 10px;
+  letter-spacing: .08em; text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line-2); white-space: nowrap; }
+td { padding: 6px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+.num { text-align: right; }
+tbody tr:hover { background: var(--panel-2); }
+.sw { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 7px; vertical-align: -1px; }
+.desc { color: var(--muted); font-size: 11px; white-space: normal; min-width: 220px; max-width: 420px; }
+.tag { display: inline-block; font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 3px; letter-spacing: .05em; }
+.t-naik { background: rgba(34,197,94,.15); color: var(--green); }
+.t-turun { background: rgba(239,68,68,.15); color: var(--red); }
+.t-datar { background: rgba(154,166,180,.12); color: var(--text-2); }
+.t-watch { background: rgba(245,197,66,.15); color: var(--amber); }
+.t-long { background: rgba(34,197,94,.15); color: var(--green); }
+.t-short { background: rgba(232,121,249,.15); color: var(--a5); }
+.t-spot { background: rgba(34,211,238,.12); color: var(--cyan); }
+.ai-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+@media (max-width: 900px) { .ai-grid { grid-template-columns: repeat(2, 1fr); } }
+.ai-note { color: var(--text-2); font-size: 11.5px; margin-top: 8px; line-height: 1.6; }
+.verdict { display: inline-block; padding: 1px 7px; border-radius: 3px; font-weight: 700; font-size: 10.5px; }
+.hold { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 3px; }
+.kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+@media (max-width: 700px) { .kpis { grid-template-columns: repeat(2, 1fr); } }
+.kpi { background: var(--panel-2); border: 1px solid var(--line); border-radius: 5px; padding: 8px 10px; }
+.kpi .k { color: var(--muted); font-size: 10px; letter-spacing: .1em; text-transform: uppercase; }
+.kpi .v { font-size: 20px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.kpi .d { color: var(--muted); font-size: 10.5px; }
+.chart { height: clamp(260px, 38vh, 420px); }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 14px; color: var(--text-2); font-size: 11px; margin-bottom: 6px; }
+.feed { max-height: 360px; overflow: auto; }
+.feed .row { display: grid; grid-template-columns: 70px 52px 1fr auto; gap: 8px; padding: 5px 2px; border-bottom: 1px solid var(--line); align-items: center; }
+.side { font-size: 10px; font-weight: 700; text-align: center; border-radius: 3px; padding: 1px 0; color: #0b0b0b; }
+.foot { color: var(--muted); font-size: 11px; margin-top: 12px; }
+.bar { height: 6px; background: var(--line); border-radius: 3px; overflow: hidden; min-width: 60px; }
+.bar i { display: block; height: 100%; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top">
+    <div class="logo">A</div>
+    <div class="brand"><b>ALTCOIN × QUANT</b><div>TOP 30 + WATCHLIST · SPOT + FUTURES · PAPER TRADING</div></div>
+    <span class="sim-badge">SIMULASI</span>
+    <a class="chip" href="/">← MEMECOIN</a>
+    <div class="grow"></div>
+    <span class="chip"><span class="live" id="live"></span><span id="live-txt">MEMUAT</span></span>
+    <span class="chip">BTC <b id="btc">–</b></span>
+    <span class="chip">KOIN <b id="ncoins">–</b></span>
+    <span class="clock" id="clock">--:--:--</span>
+  </div>
+
+  <div class="grid">
+    <section class="panel span-12">
+      <div class="ph"><span class="ix">01</span> RINGKASAN <span class="r" id="kpi-r"></span></div>
+      <div class="kpis" id="kpis"></div>
+    </section>
+
+    <section class="panel span-12">
+      <div class="ph"><span class="ix">LAB</span> STRATEGI · LEADERBOARD <span class="r">live = sejak simulator jalan · backtest = uji di data historis (diulang tiap 24 jam)</span></div>
+      <div class="table-wrap" id="lb"></div>
+    </section>
+
+    <section class="panel span-12">
+      <div class="ph"><span class="ix">AI</span> FUTURES AI · HASIL LATIHAN <span class="r" id="ai-r"></span></div>
+      <div id="ai"></div>
+    </section>
+
+    <section class="panel span-7">
+      <div class="ph"><span class="ix">02</span> HASIL LIVE PER STRATEGI (%) <span class="r">dicatat tiap 5 menit</span></div>
+      <div class="legend" id="eq-legend"></div>
+      <div class="chart" id="eq-chart"></div>
+    </section>
+
+    <section class="panel span-5">
+      <div class="ph"><span class="ix">03</span> POSISI TERBUKA <span class="r" id="open-r"></span></div>
+      <div class="table-wrap" id="open" style="max-height: 440px"></div>
+    </section>
+
+    <section class="panel span-8">
+      <div class="ph"><span class="ix">04</span> PASAR · KOIN YANG DIPANTAU <span class="r">tren 1j: harga vs EMA50/EMA200 · tren 4j: EMA21 vs EMA55</span></div>
+      <div class="table-wrap" id="market" style="max-height: 560px"></div>
+    </section>
+
+    <section class="panel span-4">
+      <div class="ph"><span class="ix">05</span> TRANSAKSI TERBARU</div>
+      <div class="feed" id="feed"></div>
+    </section>
+  </div>
+  <p class="foot">Semua angka berasal dari <b>simulasi tanpa uang sungguhan</b> memakai harga publik Binance, sudah dipotong fee (spot 0,1%, futures 0,05% per sisi dari nilai kontrak) dan perkiraan slippage. Futures memakai harga spot Binance sebagai pendekatan, funding rate OKX tiap 8 jam, dan likuidasi isolated margin. Hasil futures dihitung terhadap margin, jadi ikut dikali leverage. Backtest adalah uji di masa lalu, bukan jaminan hasil ke depan. Ini bukan saran investasi.</p>
+</div>
+
+<script>
+const css = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+const TZ = -new Date().getTimezoneOffset() * 60;
+const usd = v => (v < 0 ? "-$" : "$") + Math.abs(v).toFixed(2);
+const pct = (v, d = 1) => v == null ? "–" : (v >= 0 ? "+" : "") + v.toFixed(d) + "%";
+const cls = v => v == null ? "" : v > 0 ? "pos" : v < 0 ? "neg" : "";
+const px = p => p == null ? "–" : p >= 100 ? p.toLocaleString("en-US", { maximumFractionDigits: 2 }) : p >= 1 ? p.toFixed(4) : p.toPrecision(4);
+const hms = ts => new Date(ts * 1000).toLocaleTimeString("id-ID", { hour12: false });
+const dt = ts => new Date(ts * 1000).toLocaleString("id-ID", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+const ago = ts => { const m = (Date.now() / 1000 - ts) / 60; return m < 60 ? Math.round(m) + " mnt" : m < 1440 ? (m / 60).toFixed(1) + " jam" : (m / 1440).toFixed(1) + " hari"; };
+let S = null, STRAT = {};
+const color = name => css("--a" + ((STRAT[name] ? STRAT[name].order : 0) % 9));
+const mkt = s => s.market === "futures" ? `<span class="tag t-short">FUT ${s.leverage}×</span>` : `<span class="tag t-spot">SPOT</span>`;
+const dirTag = o => !o.liq ? `<span class="tag t-spot">SPOT</span>` : `<span class="tag ${o.side > 0 ? "t-long" : "t-short"}">${o.side > 0 ? "LONG" : "SHORT"} ${o.lev}×</span>`;
+const label = name => STRAT[name] ? STRAT[name].label : name;
+
+function renderTop() {
+  const hb = S.stats.heartbeat, alive = hb && Date.now() / 1000 - hb < 300;
+  document.getElementById("live").className = "live " + (hb ? (alive ? "on" : "off") : "");
+  document.getElementById("live-txt").textContent = !hb ? "BELUM JALAN" : alive ? "LIVE" : "BERHENTI " + ago(hb);
+  const btc = S.market.find(m => m.symbol === "BTCUSDT");
+  document.getElementById("btc").textContent = btc && btc.price ? "$" + px(btc.price) : "–";
+  document.getElementById("ncoins").textContent = S.market.length;
+}
+
+function renderKpis() {
+  const real = S.strategies.filter(s => s.name !== "hodl_btc"), hodl = S.strategies.find(s => s.name === "hodl_btc");
+  const best = [...real].sort((a, b) => b.ret_pct - a.ret_pct)[0];
+  const trades = real.reduce((t, s) => t + s.trades, 0), wins = real.reduce((t, s) => t + s.wins, 0);
+  const open = real.reduce((t, s) => t + s.open, 0);
+  const btBest = [...real].filter(s => s.backtest).sort((a, b) => b.backtest.ret_pct - a.backtest.ret_pct)[0];
+  const k = [
+    ["Strategi terbaik (live)", best ? `<span class="${cls(best.ret_pct)}">${pct(best.ret_pct)}</span>` : "–", best ? esc(best.label) : "belum ada data"],
+    ["HODL BTC (pembanding)", hodl ? `<span class="${cls(hodl.ret_pct)}">${pct(hodl.ret_pct)}</span>` : "–", "strategi bagus harus mengalahkan ini"],
+    ["Trade selesai (live)", trades, trades ? `${wins} untung · win rate ${(wins / trades * 100).toFixed(0)}% · ${open} terbuka` : `${open} posisi terbuka`],
+    ["Terbaik di backtest", btBest ? `<span class="${cls(btBest.backtest.ret_pct)}">${pct(btBest.backtest.ret_pct)}</span>` : "–",
+      btBest ? `${esc(btBest.label)} · ${btBest.backtest.days.toFixed(0)} hari` : "menunggu backtest"]];
+  document.getElementById("kpis").innerHTML = k.map(([a, b, c]) => `<div class="kpi"><div class="k">${a}</div><div class="v">${b}</div><div class="d">${c}</div></div>`).join("");
+  const started = Math.min(...S.strategies.map(s => s.started));
+  document.getElementById("kpi-r").textContent = isFinite(started) ? `modal $${S.budget} per strategi · maks ${S.max_positions} posisi · jalan sejak ${dt(started)}` : "";
+}
+
+function renderLb() {
+  const rows = [...S.strategies].sort((a, b) => b.ret_pct - a.ret_pct);
+  document.getElementById("lb").innerHTML = `<table><thead><tr><th>#</th><th>STRATEGI</th><th>PASAR</th><th>ATURAN</th><th>TF</th>
+    <th class="num">SALDO</th><th class="num">LIVE</th><th class="num">TRADE</th><th class="num">WIN</th><th class="num">MAX DD</th><th class="num">TERBUKA</th>
+    <th class="num">BACKTEST</th><th class="num">BT TRADE · WIN</th><th class="num">BT PF</th><th class="num">BT MAX DD</th></tr></thead><tbody>` +
+    rows.map((s, i) => { const b = s.backtest;
+      return `<tr><td class="mut">${i + 1}</td><td><span class="sw" style="background:${color(s.name)}"></span><b>${esc(s.label)}</b></td><td>${mkt(s)}</td>
+      <td class="desc">${esc(s.desc)}</td><td>${s.tf === "1h" ? "1 jam" : "4 jam"}</td>
+      <td class="num">${usd(s.equity)}</td><td class="num ${cls(s.ret_pct)}"><b>${pct(s.ret_pct, 2)}</b></td>
+      <td class="num">${s.trades}</td><td class="num">${s.trades ? (s.wins / s.trades * 100).toFixed(0) + "%" : "–"}</td>
+      <td class="num ${s.max_dd < -0.05 ? "neg" : ""}">${pct(s.max_dd)}</td><td class="num">${s.open}</td>
+      <td class="num ${b ? cls(b.ret_pct) : ""}">${b ? pct(b.ret_pct) + ` <span class="mut">· ${b.days.toFixed(0)} hari</span>` : "–"}</td>
+      <td class="num">${b ? `${b.trades} · ${b.trades ? (b.wins / b.trades * 100).toFixed(0) + "%" : "–"}` : "–"}</td>
+      <td class="num ${b && b.pf != null ? (b.pf >= 1 ? "pos" : "neg") : ""}">${b && b.pf != null ? b.pf.toFixed(2) : "–"}</td>
+      <td class="num">${b ? pct(b.max_dd) : "–"}</td></tr>`; }).join("") + `</tbody></table>`;
+}
+
+let eqChart, eqSeries = {};
+function renderEquity() {
+  const el = document.getElementById("eq-chart");
+  if (!eqChart) {
+    eqChart = LightweightCharts.createChart(el, {
+      autoSize: true,
+      layout: { background: { type: "solid", color: css("--panel") }, textColor: css("--muted"), fontFamily: css("--mono"), fontSize: 11 },
+      grid: { vertLines: { color: "rgba(255,255,255,0.03)" }, horzLines: { color: css("--line") } },
+      rightPriceScale: { borderColor: css("--line-2") },
+      timeScale: { borderColor: css("--line-2"), timeVisible: true, secondsVisible: false },
+      crosshair: { vertLine: { color: css("--line-2"), labelBackgroundColor: css("--panel-2") }, horzLine: { color: css("--line-2"), labelBackgroundColor: css("--panel-2") } } });
+  }
+  const fmt = { type: "custom", formatter: v => (v >= 0 ? "+" : "") + v.toFixed(2) + "%", minMove: 0.01 };
+  S.strategies.forEach(s => {
+    const pts = (S.equity[s.name] || []).map(p => ({ time: p.time + TZ, value: p.value }));
+    if (!eqSeries[s.name]) {
+      eqSeries[s.name] = eqChart.addLineSeries({ color: color(s.name), lineWidth: 2, priceFormat: fmt,
+        lineStyle: s.name === "hodl_btc" ? 2 : 0, priceLineVisible: false, lastValueVisible: true });
+      if (s.name === "hodl_btc") eqSeries[s.name].createPriceLine({ price: 0, color: css("--line-2"), lineWidth: 1, lineStyle: 1, axisLabelVisible: false });
+    }
+    eqSeries[s.name].setData(pts);
+  });
+  document.getElementById("eq-legend").innerHTML = S.strategies.map(s =>
+    `<span><span class="sw" style="background:${color(s.name)}"></span>${esc(s.label)} <b class="${cls(s.ret_pct)}">${pct(s.ret_pct, 2)}</b></span>`).join("");
+}
+
+function renderOpen() {
+  const el = document.getElementById("open"), rows = S.open.filter(o => o.strategy !== "hodl_btc");
+  document.getElementById("open-r").textContent = `${rows.length} posisi`;
+  if (!rows.length) { el.innerHTML = `<div class="empty">Belum ada posisi. Strategi menunggu sinyal masuk<br>(dicek setiap candle 1 jam / 4 jam tertutup).</div>`; return; }
+  el.innerHTML = `<table><thead><tr><th>KOIN</th><th>ARAH</th><th>STRATEGI</th><th class="num">MASUK</th><th class="num">SEKARANG</th><th class="num">HASIL</th><th class="num">STOP</th><th class="num">LIKUIDASI</th><th class="num">UMUR</th></tr></thead><tbody>` +
+    rows.map(o => `<tr><td><b>${esc(o.symbol.replace(/USDT$/, ""))}</b></td><td>${dirTag(o)}</td>
+      <td><span class="sw" style="background:${color(o.strategy)}"></span>${esc(label(o.strategy))}</td>
+      <td class="num">${px(o.entry)}</td><td class="num">${px(o.price)}</td>
+      <td class="num ${cls(o.ret_pct)}"><b>${pct(o.ret_pct, 2)}</b></td>
+      <td class="num mut">${px(o.stop)}</td><td class="num ${o.liq ? "neg" : "mut"}">${o.liq ? px(o.liq) : "–"}</td><td class="num mut">${ago(o.opened)}</td></tr>`).join("") + `</tbody></table>`;
+}
+
+function renderMarket() {
+  const trend = t => t ? `<span class="tag t-${t.toLowerCase()}">${t}</span>` : `<span class="mut">–</span>`;
+  const rsiBar = r => r == null ? "–" : `<div style="display:flex;align-items:center;gap:6px;justify-content:flex-end">
+    <span class="${r < 30 ? "pos" : r > 70 ? "neg" : ""}">${r.toFixed(0)}</span>
+    <div class="bar" style="width:60px"><i style="width:${r}%;background:${r < 30 ? css("--green") : r > 70 ? css("--red") : css("--text-2")}"></i></div></div>`;
+  document.getElementById("market").innerHTML = `<table><thead><tr><th>#</th><th>KOIN</th><th class="num">HARGA</th><th class="num">24J</th>
+    <th class="num">RSI 1J</th><th>TREN 1J</th><th>TREN 4J</th><th>DIPEGANG</th></tr></thead><tbody>` +
+    S.market.map(m => `<tr><td class="mut">${m.rank ?? "–"}</td>
+      <td><b>${esc(m.base)}</b> ${m.watch ? `<span class="tag t-watch">INCARAN</span>` : ""}</td>
+      <td class="num">${px(m.price)}</td><td class="num ${cls(m.chg24)}">${pct(m.chg24, 2)}</td>
+      <td class="num">${rsiBar(m.rsi1h)}</td><td>${trend(m.trend1h)}</td><td>${trend(m.trend4h)}</td>
+      <td>${m.held_by.filter(n => n !== "hodl_btc").map(n => `<span class="hold" title="${esc(label(n))}" style="background:${color(n)}"></span>`).join("") || `<span class="mut">–</span>`}</td></tr>`).join("") +
+    `</tbody></table>`;
+}
+
+function renderFeed() {
+  const el = document.getElementById("feed"), rows = S.feed.filter(f => f.strategy !== "hodl_btc");
+  if (!rows.length) { el.innerHTML = `<div class="empty">Belum ada transaksi.</div>`; return; }
+  el.innerHTML = rows.map(f => { const buy = f.side === "BELI", good = !buy && (f.ret ?? 0) >= 1, fut = (f.lev || 1) > 1;
+    const openTxt = !fut ? "BELI" : f.dir < 0 ? "SHORT" : "LONG", closeTxt = (fut ? "TUTUP" : "JUAL") + (good ? "+" : "-");
+    const openCol = !fut ? css("--cyan") : f.dir < 0 ? css("--a5") : css("--green");
+    return `<div class="row"><span class="mut">${hms(f.ts)}</span>
+      <span class="side" style="background:${buy ? openCol : good ? css("--green") : css("--red")}">${buy ? openTxt : closeTxt}</span>
+      <span><b>${esc(f.symbol.replace(/USDT$/, ""))}</b> <span class="mut">${esc(label(f.strategy))}</span></span>
+      <span>${buy ? usd(f.usd) : `<b class="${cls((f.ret ?? 1) - 1)}">${pct(((f.ret ?? 1) - 1) * 100)}</b> <span class="mut">${esc(f.reason)}</span>`}</span></div>`; }).join("");
+}
+
+function renderAi() {
+  const A = S.ai || {}, m = A.live, b = A.backtest, el = document.getElementById("ai");
+  if (!m) { el.innerHTML = `<div class="empty">Model AI belum dilatih. Latihan berjalan otomatis saat simulator mulai (±1 menit).</div>`; return; }
+  document.getElementById("ai-r").textContent = `dilatih ${dt(m.ts)} · diulang tiap 24 jam · ${A.history.length}× latihan tercatat`;
+  const hit = (n, h, r) => n ? `<span class="${h > 0.5 ? "pos" : "neg"}">${(h * 100).toFixed(0)}%</span> <span style="font-size:13px" class="${cls(r)}">${pct(r, 2)}</span>` : "–";
+  const lift = (m.acc - m.base_acc) * 100;
+  const sigOk = k => m[k + "_n"] >= 200 && m[k + "_hit"] > 0.5 && m[k + "_ret"] > 0.2;
+  const sides = (m.sides || []).map(x => x > 0 ? "LONG" : "SHORT");
+  const verdict = sigOk("long") || sigOk("short")
+    ? `<span class="verdict" style="background:rgba(34,197,94,.15);color:var(--green)">ADA PETUNJUK${sigOk("long") && !sigOk("short") ? " (LONG saja)" : !sigOk("long") ? " (SHORT saja)" : ""}</span>`
+    : `<span class="verdict" style="background:rgba(239,68,68,.15);color:var(--red)">BELUM PUNYA KEUNGGULAN</span>`;
+  const bt = STRAT.fut_ai && STRAT.fut_ai.backtest;
+  const k = [
+    ["Data latihan", m.samples.toLocaleString("id-ID"), `${m.coins} koin · ${m.days.toFixed(0)} hari candle 1 jam · 18 ciri`],
+    ["Akurasi (data uji)", `<span class="${cls(lift)}">${(m.acc * 100).toFixed(1)}%</span>`, `tebak kelas terbanyak saja: ${(m.base_acc * 100).toFixed(1)}% · uji ${m.val_days.toFixed(0)} hari terakhir`],
+    ["Sinyal LONG: benar · rata²", hit(m.long_n, m.long_hit, m.long_ret), `${m.long_n} sinyal · dilihat 12 jam kemudian`],
+    ["Sinyal SHORT: benar · rata²", hit(m.short_n, m.short_hit, m.short_ret), `${m.short_n} sinyal · dilihat 12 jam kemudian`]];
+  el.innerHTML = `<div class="ai-grid">` + k.map(([a, v, c]) => `<div class="kpi"><div class="k">${a}</div><div class="v">${v}</div><div class="d">${c}</div></div>`).join("") + `</div>
+    <div class="ai-note">Penilaian: ${verdict} &nbsp;Arah yang boleh dipakai AI: <b>${sides.length ? sides.join(" & ") : "tidak ada (AI menunggu, tidak membuka posisi)"}</b><br>Cara AI belajar: dari setiap candle 1 jam semua koin, AI menebak apakah 12 jam ke depan harga <b>NAIK</b>, <b>TURUN</b>, atau <b>DATAR</b>
+    (bergerak lebih dari 2×ATR atau tidak). Angka di atas diukur di 20% data terbaru yang <b>tidak ikut dipelajari</b>. AI dianggap punya petunjuk bila minimal 200 sinyal, benar &gt; 50% <i>dan</i> rata-ratanya &gt; 0,2% (lebih besar dari biaya).
+    ${b ? `<br>Backtest walk-forward (belajar dari 70% data awal, lalu trading di ${bt ? bt.days.toFixed(0) : "–"} hari sisanya): sinyal LONG benar ${b.long_n ? (b.long_hit * 100).toFixed(0) + "%" : "–"}, SHORT benar ${b.short_n ? (b.short_hit * 100).toFixed(0) + "%" : "–"}${bt ? `, hasil trading <b class="${cls(bt.ret_pct)}">${pct(bt.ret_pct)}</b>` : ""}.` : ""}</div>`;
+}
+
+async function refresh() {
+  try {
+    const r = await fetch("/api/alt/summary", { cache: "no-store" });
+    S = await r.json();
+    STRAT = Object.fromEntries(S.strategies.map(s => [s.name, s]));
+    if (!S.strategies.length) {
+      document.getElementById("live-txt").textContent = "BELUM JALAN";
+      document.getElementById("lb").innerHTML = `<div class="empty">Simulator altcoin belum berjalan. Jalankan <b>altcoin.bat</b> atau <b>mulai_semua.bat</b>.</div>`;
+      return;
+    }
+    renderTop(); renderKpis(); renderLb(); renderAi(); renderEquity(); renderOpen(); renderMarket(); renderFeed();
+  } catch (e) {
+    document.getElementById("live").className = "live off";
+    document.getElementById("live-txt").textContent = "SERVER DASHBOARD TIDAK MERESPONS";
+  }
+}
+setInterval(() => document.getElementById("clock").textContent = new Date().toLocaleTimeString("id-ID", { hour12: false }), 1000);
+refresh(); setInterval(refresh, 10000);
+</script>
+</body>
+</html>

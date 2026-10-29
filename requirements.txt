@@ -1,0 +1,4 @@
+httpx>=0.28
+websockets>=16.0
+numpy>=2.0
+scikit-learn>=1.5
