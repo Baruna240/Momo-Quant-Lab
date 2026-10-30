@@ -25,7 +25,7 @@ from features import POLL_SEC as FEATURE_POLL_SEC, FeatureTracker
 from altcoin import alt_status_text
 from risk import RiskLimits, RiskManager
 from costs import SLIP_MODEL_VERSION, slippage as slip_model
-from flow import PUBLIC_RPC, SAMPLE_EVERY as FLOW_SAMPLE_EVERY, FlowTracker
+from flow import PUBLIC_RPC, SAMPLE_EVERY as FLOW_SAMPLE_EVERY, FlowTracker, Paced
 from wallet_lab import Rpc as PublicRpc
 from meme_engine import ExitState, exit_orders
 from safety import assess as safety_assess
@@ -912,6 +912,7 @@ class Simulator:
                 ("coins_per_batch", self.s.coins_per_batch), ("batch_budget_usd", self.s.batch_budget_usd),
                 ("features_tracking", len(self.features.items)), ("trading_paused", int(self.trading_paused)),
                 ("flow_tracking", len(self.flow.items)), ("flow_trades", self.flow.trades_seen), ("flow_on", 1 if self.flow_on else 2),
+                ("flow_sample_ok", self.flow.sample_ok), ("flow_sample_fail", self.flow.sample_fail),
                 ("antirug_blocked", sum(st.antirug_blocked for st in self.strategies.values())),
                 ("ws_live", self.ws_live)]
         for st in self.strategies.values():
@@ -1049,10 +1050,10 @@ class Simulator:
             self.notify("⏸ Catatan: trading masih DIJEDA (dari /stop sebelumnya). Ketik /mulai untuk melanjutkan.")
         tasks = [self.listen_new_tokens(), self.poll_loop(), self.sol_price_loop(), self.summary_loop(),
                  self.backup_loop(), self.ws_prices(), self.features.meta_worker(self.http)]
-        if not self.flow_on:   # mode sampel aliran transaksi: RPC publik Solana, 2 permintaan bersamaan (sopan)
+        if not self.flow_on:   # mode sampel aliran transaksi: RPC publik Solana dengan jeda tetap antar panggilan
             pub = PublicRpc(PUBLIC_RPC)
-            pub.sem = asyncio.Semaphore(2)
-            tasks.append(self.flow.sample_worker(pub))
+            pub.sem = asyncio.Semaphore(1)
+            tasks.append(self.flow.sample_worker(Paced(pub)))
         if tg:
             tasks += [self.telegram_sender(), self.telegram_commands()]
         await asyncio.gather(*tasks)

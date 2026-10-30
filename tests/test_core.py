@@ -17,6 +17,7 @@ import flow  # noqa: E402
 from meme_engine import ExitState, exit_orders  # noqa: E402
 import safety  # noqa: E402
 import indicators as ind  # noqa: E402
+import research  # noqa: E402
 import altcoin  # noqa: E402
 import numpy as np  # noqa: E402
 import tempfile  # noqa: E402
@@ -380,6 +381,40 @@ class IndicatorTest(unittest.TestCase):
         lv = ind.levels(c, c, c, atr_now=0.1, k=3)
         self.assertAlmostEqual(lv[0]["price"], 10.0, places=6)
         self.assertGreaterEqual(lv[0]["touches"], 5)
+
+
+class ResearchTest(unittest.TestCase):
+    def bars(self, o, h, l, c):
+        n = len(c)
+        return {"o": np.array(o, float), "h": np.array(h, float), "l": np.array(l, float), "c": np.array(c, float),
+                "t": np.arange(n) * 3600.0, "atr": np.full(n, 1.0)}
+
+    def test_entry_at_next_open_and_gap_through_stop(self):
+        d = self.bars(o=[10, 11, 12, 9, 9], h=[10, 12, 12.5, 9.5, 9.5], l=[10, 10.5, 11.5, 8.5, 8.5], c=[10, 11.5, 12, 9, 9])
+        tr = research.simulate(d, [0], [10.0], cost=0.0)
+        self.assertEqual(tr[0]["t_in"], 3600.0)                 # sinyal di candle 0 -> masuk di buka candle 1
+        self.assertAlmostEqual(tr[0]["ret"], 9 / 11 - 1)         # gap di candle 3 melewati stop 10 -> keluar di buka 9
+        self.assertEqual(tr[0]["why"], "stop")
+
+    def test_one_position_per_coin(self):
+        d = self.bars(o=[10] * 6, h=[10.5] * 6, l=[9.8] * 6, c=[10] * 6)
+        sig = np.array([False, False, True, False, False, False])
+        tr = research.simulate(d, [0, 1], [5.0, 5.0], cost=0.0, exit_sig=sig)
+        self.assertEqual(len(tr), 1)                             # sinyal kedua datang saat posisi pertama masih terbuka
+
+    def test_daily_value_only_after_daily_close(self):
+        t4 = np.arange(12) * 14400.0                             # dua hari candle 4 jam
+        td = np.array([0.0, 86400.0])
+        v = research.align(t4, td, np.array([1.0, 2.0]), 86400, 14400)
+        self.assertTrue(np.isnan(v[4]))                          # candle 4j terakhir hari pertama selesai tepat saat hari 1 selesai...
+        self.assertEqual(v[5], 1.0)                              # ...nilai hari 1 baru terbaca di candle yang selesai pada/setelah itu
+        self.assertEqual(v[10], 1.0)                             # hari ke-2 belum selesai -> masih nilai hari 1
+        self.assertEqual(v[11], 2.0)                             # candle 4j terakhir selesai bersamaan dengan hari ke-2
+
+    def test_portfolio_respects_slots(self):
+        trades = [{"t_in": 0, "t_out": 10, "ret": 0.1} for _ in range(research.SLOTS + 3)]
+        r = research.portfolio(trades, 0, 365 * 86400)
+        self.assertAlmostEqual(r["total"], 0.1)                  # hanya SLOTS posisi diambil, masing-masing 1/SLOTS modal
 
 
 if __name__ == "__main__":

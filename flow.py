@@ -30,10 +30,11 @@ SERIAL_MIN = 3
 RETAIN_RAW_DAYS = 21           # transaksi mentah lebih tua dari ini dihapus (ringkasan & label tetap)
 # mode sampel (tanpa API key PumpPortal): sebagian token dibaca ulang dari blockchain lewat RPC publik Solana
 PUBLIC_RPC = "https://api.mainnet-beta.solana.com"
-SAMPLE_EVERY = 5               # 1 dari 5 token baru
+SAMPLE_EVERY = 8               # 1 dari 8 token baru (anggaran batas RPC publik)
 SAMPLE_AT = 75                 # baca ulang transaksi 60 detik pertama saat token berumur 75 detik
 SAMPLE_WINDOW = 60
-SAMPLE_MAX_TX = 80             # paling banyak 80 transaksi per token (hemat batas RPC publik)
+SAMPLE_MAX_TX = 40             # paling banyak 40 transaksi per token (hemat batas RPC publik)
+PUBLIC_RPC_INTERVAL = 1.1      # RPC publik menolak > ~10 panggilan / 10 dtk per jenis: jeda tetap antar panggilan
 
 
 def connect(path=FLOW_DB):
@@ -105,7 +106,9 @@ class FlowTracker:
         self.clock = clock
         self.sample_every = sample_every      # 0 = mode stream (PumpPortal); > 0 = mode sampel lewat RPC publik
         self.counter = 0
-        self.jobs = None                      # antrean kerja mode sampel (dibuat saat worker berjalan)
+        self.jobs = None                      # antrean baca-ulang transaksi awal (dibuat saat worker berjalan)
+        self.dev_jobs = None                  # antrean cek saldo dev (jalur sendiri supaya tidak tertahan)
+        self.sample_ok = self.sample_fail = 0
         self.items = {}
         self.to_sub, self.to_unsub = [], []
         self.snipe_log = {}            # dompet -> [waktu ikut sniping], untuk sniper "langganan"
@@ -216,15 +219,18 @@ class FlowTracker:
         if not it["queued"] and age >= SAMPLE_AT:
             it["queued"] = True
             self.jobs.put_nowait(("early", mint))
-        if not it["dev_queued"] and age >= TRACK_SEC:
+        if not it["dev_queued"] and age >= TRACK_SEC and self.dev_jobs is not None:
             it["dev_queued"] = True
-            self.jobs.put_nowait(("dev", mint))
+            self.dev_jobs.put_nowait(("dev", mint))
 
     async def sample_worker(self, rpc):
-        """Kerjakan antrean mode sampel satu per satu (sopan terhadap batas RPC publik)."""
-        self.jobs = asyncio.Queue()
+        """Dua jalur kerja mode sampel: baca-ulang transaksi awal, dan cek saldo dev di menit ke-20."""
+        self.jobs, self.dev_jobs = asyncio.Queue(), asyncio.Queue()
+        await asyncio.gather(self._lane(rpc, self.jobs), self._lane(rpc, self.dev_jobs))
+
+    async def _lane(self, rpc, queue):
         while True:
-            kind, mint = await self.jobs.get()
+            kind, mint = await queue.get()
             it = self.items.get(mint)
             if not it:
                 continue
@@ -234,9 +240,10 @@ class FlowTracker:
                 else:
                     res = await rpc("getTokenAccountsByOwner", [it["creator"], {"mint": mint}, {"encoding": "jsonParsed"}])
                     bal = sum(float(a["account"]["data"]["parsed"]["info"]["tokenAmount"]["uiAmount"] or 0) for a in res["value"])
-                    it["dev_sold"] = max(0.0, it["dev_tokens"] - bal)
+                    it["dev_sold"] = max(it["dev_sold"], it["dev_tokens"] - bal)
+                self.sample_ok += 1
             except Exception:
-                pass                      # gagal = data token ini dibiarkan kosong, tidak menghambat yang lain
+                self.sample_fail += 1     # gagal = pakai yang sudah terlihat di transaksi awal, tidak menghambat yang lain
             finally:
                 if kind == "early":
                     it["raw_ready"] = True
@@ -273,8 +280,10 @@ class FlowTracker:
         it["traders"] = {r[1] for r in raw}
         it["missed"] = block0                 # mode sampel: SOL dibeli di blok yang sama dengan pembuatan token
         it["first_age"] = 0.0
-        if raw and any(r[2] < 0 and r[1] == it["creator"] for r in raw):
-            it["dev_first"] = min(r[0] for r in raw if r[2] < 0 and r[1] == it["creator"])
+        dev_sells = [r for r in raw if r[2] < 0 and r[1] == it["creator"]]
+        if dev_sells:
+            it["dev_first"] = min(r[0] for r in dev_sells)
+            it["dev_sold"] = max(it["dev_sold"], sum(r[4] for r in dev_sells))   # cadangan bila cek saldo dev gagal
 
     def save(self, mint, it, serial, now, finalized=True):
         t = it["token"]
@@ -309,6 +318,20 @@ class FlowTracker:
                 self.save(mint, it, serial, now, finalized=False)
             else:
                 del self.items[mint]
+
+
+class Paced:
+    """Bungkus RPC dengan jeda tetap antar panggilan (dipakai bersama oleh semua jalur kerja mode sampel)."""
+    def __init__(self, rpc, interval=PUBLIC_RPC_INTERVAL):
+        self.rpc, self.interval, self.last, self.lock = rpc, interval, 0.0, asyncio.Lock()
+
+    async def __call__(self, method, params):
+        async with self.lock:
+            wait = self.last + self.interval - time.monotonic()
+            if wait > 0:
+                await asyncio.sleep(wait)
+            self.last = time.monotonic()
+        return await self.rpc(method, params)
 
 
 def trade_from_tx(tx, mint):

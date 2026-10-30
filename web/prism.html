@@ -196,7 +196,7 @@ body[data-mode="alt"] [data-only="meme"], body[data-mode="meme"] [data-only="alt
       <a href="#ringkasan">Ringkasan</a><a href="#meme">Leaderboard</a><a href="#flow">Aliran &amp; Safety</a><a href="#biaya">Biaya &amp; risiko</a>
     </nav>
     <nav class="tabs" aria-label="Bagian" data-only="alt">
-      <a href="#ringkasan">Ringkasan</a><a href="#alt">Leaderboard</a><a href="#scan">Pemindai</a><a href="#koin">Chart koin</a><a href="#uji">Backtest &amp; AI</a>
+      <a href="#ringkasan">Ringkasan</a><a href="#alt">Leaderboard</a><a href="#riset">Riset</a><a href="#scan">Pemindai</a><a href="#koin">Chart koin</a><a href="#uji">Backtest &amp; AI</a>
     </nav>
     <div class="right">
       <span class="dot"><i id="d-meme"></i>meme</span>
@@ -260,6 +260,11 @@ body[data-mode="alt"] [data-only="meme"], body[data-mode="meme"] [data-only="alt
       <div class="card s12">
         <div class="h"><h2>Leaderboard altcoin &amp; futures</h2><span class="sub">klik baris untuk menampilkan kurva PnL · fee &amp; slippage = perkiraan dari pengaturan</span><span class="r">Sharpe/Sortino per transaksi</span></div>
         <div class="tbl-wrap"><table id="t-alt"></table></div>
+      </div>
+      <div class="card s12" id="riset">
+        <div class="h"><h2>Strategy Research · 8 hipotesis</h2><span class="sub">in-sample 2022–2024 → out-of-sample 2025+ → walk-forward → stress → signifikansi → vs HODL BTC</span><span class="r" id="rs-when"></span></div>
+        <div class="tbl-wrap"><table id="t-research"></table></div>
+        <div class="note" id="rs-note"></div>
       </div>
       <div class="card s12" id="scan">
         <div class="h"><h2>Pemindai multi-timeframe</h2><span class="sub">data candle sejak 2022 · klik koin untuk membuka chart-nya</span><span class="r" id="sc-when"></span></div>
@@ -438,7 +443,7 @@ function render() {
   } else {
     table("t-alt", D.alt, MEME_COLS.filter(([k]) => k !== "risk_net"), "alt", D.alt_labels, true);
     renderBacktest(); renderAI();
-    renderScan();
+    renderScan(); renderResearch();
     renderHeat("heat-alt", D.alt, D.alt_labels);
     renderChart("chart-alt", "c-sub-alt", D.alt_curves, D.alt_labels);
     CC.render();
@@ -579,6 +584,35 @@ function renderCalib() {
     jatuh/terbang ekstrem dalam hitungan detik (rata-rata ikut terseret).`;
 }
 
+// ---------------------------------------------------------------- research engine (8 hipotesis)
+function renderResearch() {
+  const rs = D.research || [], meme = D.meme_hyp || [];
+  $("rs-when").textContent = D.research_at ? "dijalankan " + new Date(D.research_at * 1000).toLocaleString("id-ID") : "";
+  const pfc = v => v == null ? "mut" : v >= 1 ? "win" : "loss";
+  const pc = (v, d = 1) => v == null ? "–" : (v >= 0 ? "+" : "") + (100 * v).toFixed(d) + "%";
+  const steps = st => `<span style="display:inline-flex;gap:3px">${st.map(([nm, ok], i) => {
+    const reached = i <= st.findIndex(x => !x[1]) || st.every(x => x[1]);
+    const col = ok ? "#a3e635" : reached ? "#ff6b6b" : "#2a2935";
+    return `<i title="${esc(nm)}: ${ok ? "lolos" : reached ? "gagal" : "belum diuji"}" style="width:14px;height:6px;border-radius:3px;background:${col}"></i>`; }).join("")}</span>`;
+  const rows = rs.map(r => { const o = r.oos || {}, i = r.is || {}, w = r.wf || {}, b = r.btc_oos || {};
+    return `<tr><td>${esc(r.key)} ${esc(r.name)}<small>${esc(r.tf)} · ${r.coins} koin · ${r.trials} kombinasi</small></td>
+      <td class="${pfc(i.pf)}">${fx(i.pf)}</td><td class="${cls(i.exp)}">${pc(i.exp, 2)}</td>
+      <td class="${pfc(o.pf)}">${fx(o.pf)}</td><td class="${cls(o.exp)}">${pc(o.exp, 2)}</td><td>${o.n ?? 0}</td>
+      <td>${r.wf_pos}/${r.wf_folds} <span class="${pfc(w.pf)}">PF ${fx(w.pf)}</span></td>
+      <td class="${cls(o.port_annual)}">${pc(o.port_annual)}</td><td class="mut">${pc(b.annual)}</td>
+      <td>${steps(r.stages || [])}</td><td style="font-family:var(--sans);text-align:left;white-space:normal;min-width:180px">${esc(r.verdict)}</td></tr>`; }).join("");
+  const memeRows = meme.map(m => `<tr><td>${esc(m.key)} ${esc(m.name)}<small>meme coin</small></td>
+      <td colspan="9" style="font-family:var(--sans);text-align:left;white-space:normal" class="mut">${esc(m.detail)}</td>
+      <td style="font-family:var(--sans);text-align:left"><span class="chip" style="color:${m.status === "ditolak" ? "#ff6b6b" : "#fbbf24"}">${esc(m.status)}</span></td></tr>`).join("");
+  $("t-research").innerHTML = `<thead><tr><th>Hipotesis</th><th>PF in-sample</th><th>Exp in-sample</th><th>PF out-of-sample</th><th>Exp OOS</th><th>Transaksi OOS</th>
+    <th>Walk-forward</th><th>Portofolio OOS/thn</th><th>HODL BTC/thn</th><th>Tahap</th><th>Vonis</th></tr></thead><tbody>` +
+    (rows || `<tr><td colspan="11" class="mut" style="font-family:var(--sans)">Belum dijalankan. Jalankan <code>python research.py</code>.</td></tr>`) + memeRows + "</tbody>";
+  const pass = rs.filter(r => r.passed === (r.stages || []).length).length;
+  $("rs-note").innerHTML = rs.length ? `<b>${pass}</b> dari ${rs.length} hipotesis altcoin lolos semua tahap. Parameter dipilih HANYA dari data 2022–2024;
+    angka out-of-sample adalah data yang tidak pernah dipakai memilih. Syarat signifikan t ≥ ${fx(rs[0].t_need)} (dinaikkan karena ada banyak kombinasi yang diuji).
+    Semesta koin = koin besar hari ini, jadi hasil cenderung optimis (bias penyintas).` : "";
+}
+
 // ---------------------------------------------------------------- pemindai altcoin multi-timeframe
 const TCOL = { "naik": "#a3e635", "turun": "#ff6b6b", "campuran": "#fbbf24", "data kurang": "#4a4859" };
 function trendDots(tr) {
@@ -612,7 +646,7 @@ function renderScan() {
 const LCOL = { rug: "#ff6b6b", dump: "#fb923c", datar: "#4a4859", normal: "#60a5fa", lulus: "#a3e635" };
 function renderFlow() {
   const f = D.flow || {}, labels = f.labels || {}, done = f.done || 0;
-  const modeTxt = f.mode === 1 ? "stream PumpPortal" : f.mode === 2 ? "sampel 1 dari 5 token (RPC publik)" : "nonaktif";
+  const modeTxt = f.mode === 1 ? "stream PumpPortal" : f.mode === 2 ? "sampel 1 dari 8 token (RPC publik)" : "nonaktif";
   $("fl-live").innerHTML = `<span class="dot"><i class="${f.tracking ? "ok" : "bad"}"></i>${f.tracking || 0} diikuti · ${modeTxt}</span>`;
   $("fl-kpi").innerHTML = [["Transaksi sesi ini", (f.trades || 0).toLocaleString("id-ID")], ["Token berlabel", done.toLocaleString("id-ID")],
     ["Transaksi mentah", (f.raw || 0).toLocaleString("id-ID")], ["SOL blok pertama (median)", f.missed_med == null ? "–" : f.missed_med.toFixed(2)]]

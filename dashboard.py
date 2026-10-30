@@ -506,6 +506,15 @@ def quant_summary(conn):
     out["flow"] = {"tracking": int(stats.get("flow_tracking", 0)), "trades": int(stats.get("flow_trades", 0)),
                    "mode": int(stats.get("flow_on", 0))}
     out["scan"], out["scan_at"] = SCAN["rows"], SCAN["at"]
+    try:
+        from research import latest, meme_status
+        rs, rts = latest()
+        out["research"] = [{k: r.get(k) for k in ("key", "name", "tf", "coins", "trials", "params", "is", "oos", "wf", "wf_folds",
+                                                   "wf_pos", "stress", "t_need", "btc_oos", "eqw_oos", "stages", "passed", "verdict")}
+                           for r in rs]
+        out["research_at"], out["meme_hyp"] = rts, meme_status()
+    except Exception as e:  # riset belum pernah dijalankan / gagal dibaca: panel menampilkan petunjuk
+        out["research"], out["research_err"] = [], f"{type(e).__name__}"
     if fl is not None:
         try:
             rows = [dict(r) for r in fl.execute("SELECT mint, symbol, created, missed_sol, n_trades, n_traders, label, safety60,"
