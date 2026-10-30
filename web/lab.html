@@ -239,7 +239,7 @@ a { color: var(--cyan); text-decoration: none; }
     </div>
     <span class="badge">SIMULASI</span>
     <a class="pill" href="/alt-abyss" title="Altcoin & futures (tema Abyss, gurita)">ALTCOIN 🐙 →</a>
-    <span class="themes" title="Ganti tema tampilan (data sama)"><span>TEMA</span><a href="/">TERMINAL</a><a href="/lab" class="on">ABYSS</a></span>
+    <span class="themes" title="Ganti tema tampilan (data sama)"><span>TEMA</span><a href="/">TERMINAL</a><a href="/lab" class="on">ABYSS</a><a href="/prism">PRISM</a></span>
     <div class="grow"></div>
     <span class="pill"><span class="dot" id="hb-meme"></span>MEME SIM <b id="hb-meme-t">–</b></span>
     <span class="pill"><span class="dot" id="hb-alt"></span>ALT SIM <b id="hb-alt-t">–</b></span>
@@ -250,7 +250,7 @@ a { color: var(--cyan); text-decoration: none; }
 
   <div class="grid">
     <section class="panel s12" id="p-current">
-      <div class="ph"><span class="id">00</span> ARUS DATA <span class="agent" style="color:var(--cyan)">SCOUT-01</span>
+      <div class="ph">ARUS DATA <span class="agent" style="color:var(--cyan)">SCOUT-01</span>
         <span class="r">dari token lahir sampai AI diuji · setiap tahap menyala bergiliran</span></div>
       <div class="current" id="current"></div>
       <canvas id="walker"></canvas>
@@ -262,7 +262,7 @@ a { color: var(--cyan); text-decoration: none; }
     <section class="panel s3 kpi" id="k-ai"></section>
 
     <section class="panel s5" id="p-sonar">
-      <div class="ph"><span class="id">01</span> SONAR POSISI <span class="agent" style="color:var(--pink)">TRADER-02</span>
+      <div class="ph">SONAR POSISI <span class="agent" style="color:var(--pink)">TRADER-02</span>
         <span class="r" id="sonar-r"></span></div>
       <div class="sonar-wrap"><canvas id="sonar"></canvas></div>
       <div class="legend"><span><span class="sw" style="background:var(--cyan)"></span>meme</span>
@@ -272,42 +272,42 @@ a { color: var(--cyan); text-decoration: none; }
     </section>
 
     <section class="panel s4" id="p-reef">
-      <div class="ph"><span class="id">02</span> TERUMBU STRATEGI <span class="agent" style="color:var(--violet)">NAVIGATOR-03</span>
+      <div class="ph">TERUMBU STRATEGI <span class="agent" style="color:var(--violet)">NAVIGATOR-03</span>
         <span class="r">kanan = untung · kiri = rugi</span></div>
       <div class="reef" id="reef"></div>
     </section>
 
     <section class="panel s3" id="p-stream">
-      <div class="ph"><span class="id">03</span> ALIRAN KEPUTUSAN <span class="r" id="stream-r"></span></div>
+      <div class="ph">ALIRAN KEPUTUSAN <span class="r" id="stream-r"></span></div>
       <div class="stream" id="stream"></div>
     </section>
 
     <section class="panel s5" id="p-tide">
-      <div class="ph"><span class="id">04</span> PASANG-SURUT <span class="r">PnL kumulatif varian meme yang aktif (USD)</span></div>
+      <div class="ph">PASANG-SURUT <span class="r">PnL kumulatif varian meme yang aktif (USD)</span></div>
       <canvas id="tide"></canvas>
     </section>
 
     <section class="panel s3" id="p-plankton">
-      <div class="ph"><span class="id">05</span> PLANKTON DATA <span class="r" id="plk-r"></span></div>
+      <div class="ph">PLANKTON DATA <span class="r" id="plk-r"></span></div>
       <div id="plankton"></div>
     </section>
 
     <section class="panel s4" id="p-oracle">
-      <div class="ph"><span class="id">06</span> ORACLE AI <span class="agent" style="color:var(--teal)">ORACLE-04</span>
+      <div class="ph">ORACLE AI <span class="agent" style="color:var(--teal)">ORACLE-04</span>
         <span class="r" id="orc-r"></span></div>
       <div id="oracle"></div>
     </section>
 
     <!-- ================= MEME COIN · DETAIL LENGKAP (sama dengan tema Terminal) ================= -->
     <section class="panel s12 md-head" id="md-head">
-      <div class="ph" style="margin-bottom:0"><span class="id">M</span> MEME COIN · DETAIL LENGKAP
+      <div class="ph" style="margin-bottom:0">MEME COIN · DETAIL LENGKAP
         <span class="md-scope" id="md-scopes"></span>
         <span class="r">pilih varian untuk memfokuskan semua panel di bawah · klik koin di feed/tabel untuk melihat chart-nya</span></div>
       <div class="ticker" id="md-ticker" title="Arahkan mouse untuk menghentikan"><div class="track" id="md-ticker-track"></div></div>
     </section>
 
     <section class="panel s5" id="md-hero-panel">
-      <div class="ph"><span class="id">M1</span> PnL SEPANJANG WAKTU <span class="r" id="md-hero-scope"></span></div>
+      <div class="ph">PnL SEPANJANG WAKTU <span class="r" id="md-hero-scope"></span></div>
       <div class="md-hero-top" id="md-hero-sub"></div>
       <div class="md-hero" id="md-hero">$0.00</div>
       <div class="md-kv" id="md-kv"></div>
@@ -317,12 +317,12 @@ a { color: var(--cyan); text-decoration: none; }
 
     <section class="panel s7 md-split">
       <div class="md-sub">
-        <div class="ph"><span class="id">M2</span> <span id="md-coin-title">CHART KOIN</span> <span class="md-tf" id="md-coin-tf"><button data-m="15" aria-pressed="true">15 DTK</button><button data-m="60" aria-pressed="false">1 MNT</button><button data-m="300" aria-pressed="false">5 MNT</button><button data-m="line" aria-pressed="false">GARIS</button></span> <span class="r" id="md-coin-links"></span></div>
+        <div class="ph"><span id="md-coin-title">CHART KOIN</span> <span class="md-tf" id="md-coin-tf"><button data-m="15" aria-pressed="true">15 DTK</button><button data-m="60" aria-pressed="false">1 MNT</button><button data-m="300" aria-pressed="false">5 MNT</button><button data-m="line" aria-pressed="false">GARIS</button></span> <span class="r" id="md-coin-links"></span></div>
         <div class="md-legend" id="md-coin-legend">Klik koin di feed atau tabel untuk melihat chart-nya.</div>
         <div class="md-chart" id="md-coin-chart"></div>
       </div>
       <div class="md-sub">
-        <div class="ph"><span class="id">M2B</span> PERTUMBUHAN MODAL <span class="r" id="md-g-scope"></span></div>
+        <div class="ph">PERTUMBUHAN MODAL <span class="r" id="md-g-scope"></span></div>
         <div class="md-gstats" id="md-g-stats"></div>
         <div class="md-legend" id="md-g-legend"></div>
         <div class="md-chart" id="md-g-chart"></div>
@@ -330,39 +330,39 @@ a { color: var(--cyan); text-decoration: none; }
     </section>
 
     <section class="panel s12">
-      <div class="ph"><span class="id">M3</span> STRATEGY LAB · LEADERBOARD <span class="r">semua varian diuji pada koin yang sama · klik baris untuk fokus ke varian</span></div>
+      <div class="ph">STRATEGY LAB · LEADERBOARD <span class="r">semua varian diuji pada koin yang sama · klik baris untuk fokus ke varian</span></div>
       <div class="md-table" id="md-lab"></div>
     </section>
 
     <section class="panel s8">
-      <div class="ph"><span class="id">M4</span> KURVA EQUITY (PnL KUMULATIF, USD)</div>
+      <div class="ph">KURVA EQUITY (PnL KUMULATIF, USD)</div>
       <div class="md-legend" id="md-eq-legend"></div>
       <div class="md-chart tall" id="md-eq-chart"></div>
     </section>
 
     <section class="panel s4">
-      <div class="ph"><span class="id">M5</span> LIVE FEED MEME <span class="r">40 transaksi terakhir · klik untuk chart</span></div>
+      <div class="ph">LIVE FEED MEME <span class="r">40 transaksi terakhir · klik untuk chart</span></div>
       <div class="md-feed" id="md-feed"></div>
     </section>
 
     <section class="panel s6">
-      <div class="ph"><span class="id">M6</span> MATRIKS HASIL <span class="r">PnL · jumlah posisi · win rate</span></div>
+      <div class="ph">MATRIKS HASIL <span class="r">PnL · jumlah posisi · win rate</span></div>
       <div class="md-table" id="md-matrix"></div>
     </section>
 
     <section class="panel s6">
-      <div class="ph"><span class="id">M7</span> MONTE CARLO · 5.000 PUTARAN <span class="r" id="md-mc-r"></span></div>
+      <div class="ph">MONTE CARLO · 5.000 PUTARAN <span class="r" id="md-mc-r"></span></div>
       <div id="md-mc"></div>
     </section>
 
     <section class="panel s4">
-      <div class="ph"><span class="id">M8</span> PUNCAK HARGA</div>
+      <div class="ph">PUNCAK HARGA</div>
       <div id="md-peaks"></div>
       <div class="note">Setinggi apa koin sempat naik dari harga beli (belum tentu terjual di puncak).</div>
     </section>
 
     <section class="panel s8">
-      <div class="ph"><span class="id">M9</span> POSISI</div>
+      <div class="ph">POSISI</div>
       <div class="md-tabs">
         <button class="md-tab" data-tab="open" aria-selected="true">SEDANG DIPEGANG</button>
         <button class="md-tab" data-tab="closed" aria-selected="false">SUDAH DITUTUP</button>
@@ -372,7 +372,7 @@ a { color: var(--cyan); text-decoration: none; }
     </section>
 
     <section class="panel s12 term" id="p-term">
-      <div class="ph"><span class="id">~</span> LOG DASAR LAUT <span class="r">peristiwa terbaru dari semua modul</span></div>
+      <div class="ph">LOG DASAR LAUT <span class="r">peristiwa terbaru dari semua modul</span></div>
       <div id="term"></div>
       <div class="prompt">momo@abyss:~$ watch --all --paper-only <span class="cursor"></span></div>
     </section>

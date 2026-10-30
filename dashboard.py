@@ -347,6 +347,150 @@ def lab_summary(conn):
     return out
 
 
+# ================= tema PRISM: konsol riset (leaderboard lengkap, biaya, risiko, 8 agent)
+PRISM_PAGE = BASE_DIR / "web" / "prism.html"
+LAB_DB = BASE_DIR / "wallet_lab.db"
+LB_KEYS = ("strategy", "n", "win_rate", "avg_rr", "profit_factor", "net", "expectancy", "expectancy_pct", "avg_win",
+           "avg_loss", "max_dd", "sharpe", "sortino", "fees", "slippage", "oos_pf", "oos_exp", "oos_n", "is_pf",
+           "wf_exp", "wf_pos", "wf_folds", "t_stat", "verdict", "risk_net", "risk_blocked", "volume")
+
+
+def _clean(v):
+    """JSON aman untuk browser: Infinity/NaN -> None (PF tak terhingga = belum pernah rugi)."""
+    if isinstance(v, float) and (v != v or v in (float("inf"), float("-inf"))):
+        return None
+    if isinstance(v, dict):
+        return {k: _clean(x) for k, x in v.items()}
+    if isinstance(v, (list, tuple)):
+        return [_clean(x) for x in v]
+    return v
+
+
+def _curve(trades, limit=160):
+    cum, pts = 0.0, []
+    for t in sorted(trades, key=lambda t: t["closed"]):
+        cum += t["pnl"]
+        pts.append([int(t["closed"]), round(cum, 4)])
+    step = max(1, len(pts) // limit)
+    return pts[::step] + ([pts[-1]] if pts and len(pts) % step else [])
+
+
+def _ro(path):
+    if not path.exists():
+        return None
+    c = sqlite3.connect(f"file:{path}?mode=ro", uri=True, timeout=5)
+    c.row_factory = sqlite3.Row
+    return c
+
+
+def quant_summary(conn):
+    from metrics import alt_trades, leaderboard, meme_trades
+    from risk import KILL_FILE, RiskLimits
+    now = time.time()
+    limits = RiskLimits()
+    out = {"now": now, "meme": [], "alt": [], "alt_bt": [], "calib": [], "risk": {}, "agents": [], "costs": {},
+           "curves": {}, "alt_curves": {}, "labels": {n: v.label for n, v in VARIANTS.items()},
+           "alt_labels": {st.name: st.label for st in ALT_STRATEGIES},
+           "limits": {k: getattr(limits, k) for k in ("max_daily_loss", "max_drawdown", "max_exposure", "max_slippage")},
+           "risk_mode": SETTINGS.risk_mode, "kill": KILL_FILE.exists()}
+    stats = {}
+    if conn is not None:
+        groups = meme_trades(conn, SETTINGS)
+        out["meme"] = [{k: r.get(k) for k in LB_KEYS} for r in leaderboard(groups, limits)]
+        out["curves"] = {n: _curve(tr) for n, tr in groups.items()}
+        allt = [t for tr in groups.values() for t in tr]
+        out["curve_all"] = _curve(allt, 120)
+        net = sum(t["pnl"] for t in allt)
+        fees = sum(t["fees"] for t in allt)
+        slip = sum(t["slip"] for t in allt)
+        out["costs"] = {"net": net, "fees": fees, "slip": slip, "gross": net + fees + slip,
+                        "volume": sum(t["cost"] for t in allt), "n": len(allt),
+                        "risk_net": sum(r.get("risk_net") or 0 for r in out["meme"])}
+        stats = {r["key"]: r["value"] for r in conn.execute("SELECT key, value FROM stats")}
+        if has_table(conn, "risk_events"):
+            ev = conn.execute("SELECT action, reasons FROM risk_events WHERE ts >= ?", (now - 86400,)).fetchall()
+            kinds = {}
+            for e in ev:
+                for part in (e["reasons"] or "").split("; "):
+                    if part:
+                        k = part.split(" ")[0] + (" " + part.split(" ")[1] if part.startswith(("rugi", "order", "kill")) else "")
+                        kinds[k] = kinds.get(k, 0) + 1
+            out["risk"] = {"events24": len(ev), "blocked24": sum(e["action"] == "blokir" for e in ev), "kinds": kinds}
+        feats = conn.execute("SELECT COUNT(*), COALESCE(SUM(created >= ?),0) FROM token_features", (now - 3600,)).fetchone()
+        out["features"] = {"total": feats[0], "last_hour": feats[1]}
+    alt = _ro(ALT_DB)
+    regime, ai = {}, {}
+    alt_hb = None
+    if alt is not None:
+        try:
+            gr = alt_trades(alt, ALT_SETTINGS, {r["symbol"] for r in alt.execute("SELECT symbol FROM alt_market WHERE rank <= 10")})
+            out["alt"] = [{k: r.get(k) for k in LB_KEYS} for r in leaderboard(gr, None)]
+            have = {r["strategy"] for r in out["alt"]}
+            out["alt"] += [{"strategy": st.name, "n": 0, "verdict": "belum ada transaksi"} for st in ALT_STRATEGIES
+                           if st.name not in have]
+            out["alt_curves"] = {n: _curve(tr) for n, tr in gr.items()}
+            altt = [t for tr in gr.values() for t in tr]
+            anet, afee, aslip = sum(t["pnl"] for t in altt), sum(t["fees"] for t in altt), sum(t["slip"] for t in altt)
+            out["costs_alt"] = {"net": anet, "fees": afee, "slip": aslip, "gross": anet + afee + aslip,
+                                "volume": sum(t["cost"] for t in altt), "n": len(altt)}
+            out["curve_alt_all"] = _curve(altt, 120)
+            best = max((r for r in out["alt"] if r.get("n") and r["strategy"] != "hodl_btc"),
+                       key=lambda r: r.get("expectancy") or -1e9, default=None)
+            out["alt_best"] = best and best["strategy"]
+            out["alt_bt"] = [dict(r) for r in alt.execute(
+                "SELECT strategy, tf, days, ret_pct, trades, wins, max_dd, pf, hodl_pct FROM alt_backtest"
+                " WHERE ran_at = (SELECT MAX(ran_at) FROM alt_backtest) ORDER BY ret_pct DESC")]
+            b = alt.execute("SELECT price, chg24, rsi1h, trend1h, trend4h FROM alt_market WHERE symbol='BTCUSDT'").fetchone()
+            regime = dict(b) if b else {}
+            m = alt.execute("SELECT meta FROM alt_ai_runs WHERE kind='live' ORDER BY ts DESC LIMIT 1").fetchone()
+            ai = json.loads(m["meta"]) if m else {}
+            hb = alt.execute("SELECT value FROM alt_stats WHERE key='heartbeat'").fetchone()
+            alt_hb = hb[0] if hb else None
+            out["alt_market"] = alt.execute("SELECT COUNT(*) FROM alt_market").fetchone()[0]
+        finally:
+            alt.close()
+    lab = _ro(LAB_DB)
+    leaders = []
+    if lab is not None:
+        try:
+            if lab.execute("SELECT 1 FROM sqlite_master WHERE name='calibration'").fetchone():
+                run = lab.execute("SELECT MAX(run) FROM calibration").fetchone()[0]
+                out["calib"] = [dict(r) for r in lab.execute("SELECT * FROM calibration WHERE run = ? ORDER BY side, latency", (run,))]
+                out["calib_at"] = run
+            if lab.execute("SELECT 1 FROM sqlite_master WHERE name='leaders'").fetchone():
+                leaders = [dict(r) for r in lab.execute("SELECT wallet, picked FROM leaders")]
+        finally:
+            lab.close()
+    sim_hb = stats.get("heartbeat")
+    # varian terbaik hanya dari yang masih aktif (varian yang dipensiunkan tetap tampil di tabel, tapi tidak dinilai juara)
+    meme_best = max((r for r in out["meme"] if r.get("n") and r["strategy"] in VARIANTS), key=lambda r: r.get("expectancy") or -1e9,
+                    default=None)
+    cand = [r["strategy"] for r in out["meme"] + out["alt"] if r.get("verdict") == "kandidat"]
+    alive = lambda hb, sec: bool(hb and now - hb < sec)
+    out["agents"] = [
+        {"id": "supervisor", "name": "Supervisor", "kind": "kode", "ok": alive(sim_hb, 60) and alive(alt_hb, 300),
+         "metric": f"meme {'aktif' if alive(sim_hb, 60) else 'MATI'} · altcoin {'aktif' if alive(alt_hb, 300) else 'MATI'}"},
+        {"id": "meme", "name": "Meme Scanner", "kind": "kode", "ok": alive(sim_hb, 60),
+         "metric": f"{int(stats.get('tokens_seen', 0))} token sesi ini · {out.get('features', {}).get('last_hour', 0)} direkam/jam"},
+        {"id": "alt", "name": "Altcoin Scanner", "kind": "kode", "ok": alive(alt_hb, 300),
+         "metric": f"{out.get('alt_market', 0)} koin · EMA/RSI/ATR/trend"},
+        {"id": "safety", "name": "Safety", "kind": "kode", "ok": True,
+         "metric": f"anti-rug tolak {int(stats.get('antirug_blocked', 0))} sesi ini"},
+        {"id": "smart", "name": "Smart Money", "kind": "kode", "ok": bool(leaders),
+         "metric": f"{len(leaders)} leader dipantau (forward test)"},
+        {"id": "regime", "name": "Market Regime", "kind": "kode", "ok": bool(regime),
+         "metric": f"BTC 1j {regime.get('trend1h', '?')} · 4j {regime.get('trend4h', '?')} · RSI {regime.get('rsi1h') or 0:.0f}"},
+        {"id": "risk", "name": "Risk & Portfolio", "kind": "veto", "ok": not out["kill"],
+         "metric": ("KILL SWITCH AKTIF" if out["kill"] else f"mode {SETTINGS.risk_mode} · {out['risk'].get('blocked24', 0)} blokir / 24j")},
+        {"id": "research", "name": "Strategy Research", "kind": "kode + LLM", "ok": True,
+         "metric": f"{len(cand)} kandidat lolos · AI futures {'menunggu bukti' if not ai.get('sides') else ', '.join(ai['sides'])}"},
+    ]
+    out["regime"], out["ai"] = regime, {k: ai.get(k) for k in ("acc", "base_acc", "long_n", "long_hit", "long_ret",
+                                                                "short_n", "short_hit", "short_ret", "sides", "trained_at")}
+    out["meme_best"] = meme_best and meme_best["strategy"]
+    return _clean(out)
+
+
 class Handler(BaseHTTPRequestHandler):
     def log_message(self, *args):
         pass
@@ -376,12 +520,16 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send(LAB_PAGE.read_bytes(), "text/html; charset=utf-8")
             if url.path in ("/alt-abyss", "/alt_abyss.html"):
                 return self.send(ALT_ABYSS_PAGE.read_bytes(), "text/html; charset=utf-8")
+            if url.path in ("/prism", "/prism.html", "/prism-alt"):
+                return self.send(PRISM_PAGE.read_bytes(), "text/html; charset=utf-8")
             conn = db()
             try:
                 if url.path == "/api/summary":
                     return self.send(summary(conn))
                 if url.path == "/api/lab":
                     return self.send(lab_summary(conn))
+                if url.path == "/api/quant":
+                    return self.send(quant_summary(conn))
                 if url.path == "/api/positions":
                     return self.send(positions(conn, q.get("status", "closed")))
                 if url.path == "/api/coin":

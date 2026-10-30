@@ -26,18 +26,22 @@ The project is documented in Bahasa Indonesia in [docs/PANDUAN.md](docs/PANDUAN.
 | **Strategy Lab** (`strategies.py`) | A/B tests entry filters (observe window, SOL inflow, price multiple), anti-rug checks (dev selling, holder concentration), and exit rules (TP ladder, trailing stop, moonbag). The *Auto* variant picks the most statistically stable variant each round, scoring mean − std/√n, and sits out when everything is losing. |
 | **Learning-data recorder** (`features.py`) | Records every token for 20 minutes: snapshots at 30/60/90/180 s, launch features (dev buy size, serial-creator count, copy-cat name count, socials), and the full price path so any exit rule can be replayed offline. |
 | **Meme ML trainer** (`meme_ai.py`) | Replays each variant's exit rules over the recorded price paths with fees, dynamic slippage and network costs. It then trains a gradient-boosting classifier on entry-time features only and evaluates it walk-forward. |
+| **Wallet Lab** (`wallet_lab.py`) | Reverse-engineers real pump.fun sniper wallets from public on-chain data (read-only). It finds wallets that repeatedly buy in the first transactions of new tokens, rebuilds their buy/sell round trips from each transaction's SOL and token deltas (fees, priority fees and tips included), and measures real PnL, entry speed, exit multiples, hold time, selectivity and which token traits they pick compared with all tokens. |
 | **Altcoin and futures simulator** (`altcoin.py`) | Covers the top 30 coins by market cap plus a watchlist. It runs **spot** strategies (EMA trend, breakout, RSI dip, 4h swing) and **perpetual futures** with leverage, long and short, isolated-margin **liquidation** and real **funding rates** (OKX). A daily backtest is shared with the live engine, and HODL BTC is the benchmark. |
 | **Futures AI** (`alt_ai.py`) | Gradient boosting on 18 candle and market-regime features predicts 12-hour direction (up, flat or down, scaled by ATR). It is retrained daily. **Safety gate:** it may only trade a direction that was proven out-of-sample (≥200 signals, >50% hit rate, mean > costs). |
+| **Metrics, risk & cost calibration** (`metrics.py`, `risk.py`, `calibrate.py`) | One shared metrics module (profit factor, expectancy, t-stat, max drawdown, per-trade Sharpe/Sortino, fees, slippage, out-of-sample PF, walk-forward stability and an honest verdict). A deterministic risk layer (daily loss, drawdown, exposure, slippage limits, kill switch, duplicate-order guard) that no strategy or AI can override; it runs in *shadow* mode for research and *enforce* mode for validated strategies. `calibrate.py` measures real slippage from on-chain prices 1–5 s after each simulated decision. |
 | **Dashboard** (`dashboard.py`, `web/`) | A real-time web UI in **two themes** (see below): live equity curves, per-coin candlestick charts with trade markers, an animated execution pipeline, the strategy leaderboard, Monte Carlo risk, and the AI training report. |
 | **Telegram bot** | Sends trade alerts, round summaries, and the `/status`, `/laporan`, `/stop`, `/mulai` and `/alt` commands. |
 
 ## Themes
-The same data powers two complete themes. Each page has a **THEME: TERMINAL | ABYSS** switch, and moving between meme coins and altcoins keeps the current theme.
+The same data powers three themes. Each page has a **THEME: TERMINAL | ABYSS** switch, and moving between meme coins and altcoins keeps the current theme.
 
-| | Terminal | Abyss (deep sea) |
-|---|---|---|
-| Meme coins | `/` with the pixel trader "Momo" | `/lab` command center with a data-carrying **crab** |
-| Altcoins & futures | `/alt` | `/alt-abyss` with an **octopus** that holds every open position |
+| | Terminal | Abyss (deep sea) | Prism (research console) |
+|---|---|---|---|
+| Meme coins | `/` with the pixel trader "Momo" | `/lab` command center with a data-carrying **crab** | `/prism` |
+| Altcoins & futures | `/alt` | `/alt-abyss` with an **octopus** that holds every open position | `/prism-alt` |
+
+**Prism** is a research console. Both pages share a live constellation of the 8 agents: each agent is a rotating 3D particle sphere with an animated glyph for its job, the research agent is a glass prism that splits the data beam into strategy rays (orbited by one dot per tested strategy, coloured by verdict), and the risk agent is an energy gate that turns amber or red when limits are hit. The verdict panel shows a strategy donut, a cost waterfall and the 6-step validation path of the best strategy. The meme page adds the full leaderboard, PnL curves, walk-forward heatmap, cost calibration and risk limits; the altcoin page adds its leaderboard, a candlestick chart per coin, backtests against HODL BTC and the futures AI gate.
 
 The Abyss characters are procedural canvas animations, not sprites:
 - The **crab** walks on 8 legs with inverse kinematics. Each foot stays planted and steps only when the body moves too far, alternating between leg groups. The crab carries data between pipeline stages and leaves glowing threads behind. It reacts to winning and losing trades, follows the cursor, and has idle behaviours: digging for pearls, dancing, blowing bubbles, sleeping.
@@ -98,6 +102,10 @@ python altcoin.py             # altcoin + futures simulator
 python dashboard.py           # http://localhost:8050  and  /alt
 python altcoin.py --backtest  # one-off backtest of all altcoin strategies
 python meme_ai.py --entry 90  # train/evaluate the meme-coin model (needs ≥1500 recorded tokens)
+python wallet_lab.py discover      # find wallets that keep buying first (needs Helius)
+python wallet_lab.py profile       # dissect their trades; then: python wallet_lab.py report
+python wallet_lab.py backtest      # replay the snipers' coin filters + scalping exits on recorded prices
+python calibrate.py --n 150       # measure real slippage on-chain (needs Helius)
 python -m unittest discover tests
 ```
 `mulai_semua.bat` starts everything in minimized windows, and `pasang_autostart.bat` starts it at Windows login.

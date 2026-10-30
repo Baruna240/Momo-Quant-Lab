@@ -135,7 +135,7 @@ tr.sel { background: rgba(157,123,255,.14) !important; box-shadow: inset 3px 0 0
     </div>
     <span class="badge">SIMULASI</span>
     <a class="pill" href="/lab" title="Meme coin (tema Abyss, kepiting)">← MEMECOIN 🦀</a>
-    <span class="themes" title="Ganti tema tampilan (data sama)"><span>TEMA</span><a href="/alt">TERMINAL</a><a href="/alt-abyss" class="on">ABYSS</a></span>
+    <span class="themes" title="Ganti tema tampilan (data sama)"><span>TEMA</span><a href="/alt">TERMINAL</a><a href="/alt-abyss" class="on">ABYSS</a><a href="/prism-alt">PRISM</a></span>
     <div class="grow"></div>
     <span class="pill"><span class="dot" id="live"></span><b id="live-txt">MEMUAT</b></span>
     <span class="pill">BTC <b id="btc">–</b></span>
@@ -150,7 +150,7 @@ tr.sel { background: rgba(157,123,255,.14) !important; box-shadow: inset 3px 0 0
     <section class="panel s3 kpi" id="k4"></section>
 
     <section class="panel s12" id="p-octo">
-      <div class="ph"><span class="id">01</span> SARANG GURITA · POSISI TERBUKA <span class="agent" style="color:var(--violet)">OCTO-05</span>
+      <div class="ph">SARANG GURITA · POSISI TERBUKA <span class="agent" style="color:var(--violet)">OCTO-05</span>
         <span class="r" id="octo-r">setiap koin = satu posisi · lengan memegang posisi yang sedang berjalan</span></div>
       <canvas id="octo"></canvas>
       <div class="legend"><span><span class="sw" style="background:var(--cyan)"></span>spot</span>
@@ -160,45 +160,45 @@ tr.sel { background: rgba(157,123,255,.14) !important; box-shadow: inset 3px 0 0
     </section>
 
     <section class="panel s12">
-      <div class="ph"><span class="id">02</span> STRATEGI · LEADERBOARD <span class="r"><span id="kpi-r"></span> · live = sejak simulator jalan · backtest = uji di data historis (diulang tiap 24 jam)</span></div>
+      <div class="ph">STRATEGI · LEADERBOARD <span class="r"><span id="kpi-r"></span> · live = sejak simulator jalan · backtest = uji di data historis (diulang tiap 24 jam)</span></div>
       <div class="table-wrap" id="lb"></div>
     </section>
 
     <section class="panel s12">
-      <div class="ph"><span class="id">03</span> FUTURES AI · HASIL LATIHAN <span class="agent" style="color:var(--teal)">ORACLE-04</span><span class="r" id="ai-r"></span></div>
+      <div class="ph">FUTURES AI · HASIL LATIHAN <span class="agent" style="color:var(--teal)">ORACLE-04</span><span class="r" id="ai-r"></span></div>
       <div id="ai"></div>
     </section>
 
     <section class="panel s7">
-      <div class="ph"><span class="id">04</span> HASIL LIVE PER STRATEGI (%) <span class="r">dicatat tiap 5 menit</span></div>
+      <div class="ph">HASIL LIVE PER STRATEGI (%) <span class="r">dicatat tiap 5 menit</span></div>
       <div class="legend" id="eq-legend" style="margin:0 0 6px"></div>
       <div class="chart" id="eq-chart"></div>
     </section>
 
     <section class="panel s5">
-      <div class="ph"><span class="id">05</span> DETAIL POSISI <span class="r" id="open-r"></span></div>
+      <div class="ph">DETAIL POSISI <span class="r" id="open-r"></span></div>
       <div class="table-wrap" id="open" style="max-height: 440px"></div>
     </section>
 
     <section class="panel s8">
-      <div class="ph"><span class="id">06</span> PASAR · KOIN YANG DIPANTAU <span class="r">tren 1j: harga vs EMA50/EMA200 · tren 4j: EMA21 vs EMA55</span></div>
+      <div class="ph">PASAR · KOIN YANG DIPANTAU <span class="r">tren 1j: harga vs EMA50/EMA200 · tren 4j: EMA21 vs EMA55</span></div>
       <div class="table-wrap" id="market" style="max-height: 560px"></div>
     </section>
 
     <section class="panel s4">
-      <div class="ph"><span class="id">07</span> TRANSAKSI TERBARU</div>
+      <div class="ph">TRANSAKSI TERBARU</div>
       <div class="feed" id="feed"></div>
     </section>
 
     <!-- ================= ALTCOIN · DETAIL LENGKAP ================= -->
     <section class="panel s12" id="ad-head">
-      <div class="ph" style="margin-bottom:0"><span class="id">A</span> ALTCOIN · DETAIL LENGKAP
+      <div class="ph" style="margin-bottom:0">ALTCOIN · DETAIL LENGKAP
         <span class="ad-scope" id="ad-scopes"></span>
         <span class="r">pilih strategi untuk memfokuskan chart, riwayat & matriks · klik koin di tabel, transaksi, atau gurita untuk melihat chart-nya</span></div>
     </section>
 
     <section class="panel s8">
-      <div class="ph"><span class="id">A1</span> <span id="ad-coin-title">CHART KOIN</span>
+      <div class="ph"><span id="ad-coin-title">CHART KOIN</span>
         <span class="ad-tf" id="ad-tf"><button data-tf="1h" aria-pressed="true">1 JAM</button><button data-tf="4h" aria-pressed="false">4 JAM</button><button data-tf="1d" aria-pressed="false">1 HARI</button></span>
         <span class="r" id="ad-coin-links"></span></div>
       <div class="ad-legend" id="ad-coin-legend">Memuat candle dari Binance…</div>
@@ -206,13 +206,13 @@ tr.sel { background: rgba(157,123,255,.14) !important; box-shadow: inset 3px 0 0
     </section>
 
     <section class="panel s4">
-      <div class="ph"><span class="id">A2</span> MATRIKS HASIL <span class="r">PnL USD · posisi · win rate (posisi ditutup)</span></div>
+      <div class="ph">MATRIKS HASIL <span class="r">PnL USD · posisi · win rate (posisi ditutup)</span></div>
       <div class="table-wrap" id="ad-matrix"></div>
       <div class="ad-stats" id="ad-stats"></div>
     </section>
 
     <section class="panel s12">
-      <div class="ph"><span class="id">A3</span> RIWAYAT POSISI DITUTUP <span class="r" id="ad-closed-r"></span></div>
+      <div class="ph">RIWAYAT POSISI DITUTUP <span class="r" id="ad-closed-r"></span></div>
       <div class="table-wrap" id="ad-closed" style="max-height: 460px"></div>
     </section>
   </div>

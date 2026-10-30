@@ -23,6 +23,8 @@ from report import build_report, connect, kelly
 from strategies import Variant, build_variants
 from features import POLL_SEC as FEATURE_POLL_SEC, FeatureTracker
 from altcoin import alt_status_text
+from risk import RiskLimits, RiskManager
+from costs import SLIP_MODEL_VERSION, slippage as slip_model
 
 PUMP_WS = "wss://pumpportal.fun/api/data"
 DEX_URL = "https://api.dexscreener.com/latest/dex/tokens/"
@@ -168,6 +170,19 @@ class Simulator:
             self.strategies[v.name] = Strategy(v.name, v, batch=(last or 0) + 1, n_closed=n, n_wins=wins,
                                                sum_win=sw, sum_loss=sl, kelly_pnl=kp)
         self.resumed = self.resume_positions()
+        # lapisan risiko deterministik: dipulihkan dari riwayat supaya batas harian/drawdown tetap benar setelah restart
+        self.risk = RiskManager(RiskLimits(), mode=settings.risk_mode)
+        self.risk.load_history(
+            self.db.execute("SELECT strategy, closed, cost_usd, pnl_usd FROM positions WHERE closed IS NOT NULL"
+                            " ORDER BY closed").fetchall(),
+            [(p.strategy, p.token.mint, p.cost_usd, p.opened) for st in self.strategies.values()
+             for p in st.positions if not p.closed])
+        self.db.execute("CREATE TABLE IF NOT EXISTS risk_events(ts REAL, strategy TEXT, mint TEXT, action TEXT, reasons TEXT)")
+        row = self.db.execute("SELECT value FROM stats WHERE key='slip_model'").fetchone()
+        if not row or row[0] != SLIP_MODEL_VERSION:
+            self.db.execute("INSERT OR REPLACE INTO stats(key, value) VALUES('slip_model', ?)", (SLIP_MODEL_VERSION,))
+            self.db.execute("INSERT OR REPLACE INTO stats(key, value) VALUES('slip_model_since', ?)", (time.time(),))
+        self.db.commit()
         self.features = FeatureTracker(self.db)
         self.auto_base = {n: st.cfg for n, st in self.strategies.items() if st.cfg.mode == "auto"}
         for name in self.auto_base:
@@ -678,19 +693,27 @@ class Simulator:
         bankroll = max(s.batch_budget_usd + st.kelly_pnl, 0.0)
         return min(bankroll * s.kelly_fraction * k["f"], s.per_coin_usd * s.kelly_max_stake_mult), k
 
-    def slippage(self, t):
-        """Slippage dinamis: kecil kalau harga diam, membesar kalau harga sedang bergerak cepat.
+    def slippage(self, t, side):
+        """Slippage terkalibrasi (costs.py): beli tetap kecil, jual membesar kalau harga sedang bergerak cepat.
         Untuk token yang baru lahir, gerakannya diukur dari harga peluncuran."""
         s = self.s
         ref = t.price_ago(s.slip_lookback_sec, time.time()) or t.launch_price or t.price
         move = abs(t.price / ref - 1) if ref else 0.0
-        return min(s.slippage_max, s.slippage_min + s.slippage_k * move)
+        return slip_model(s, move, side)
 
     def open_position(self, st, t):
         s = self.s
+        slip = self.slippage(t, "buy")
+        d = self.risk.check_entry(st.name, t.mint, s.per_coin_usd, slippage=slip, liquidity=t.real_sol)
+        if d.blocked_by or d.shadow:
+            self.db.execute("INSERT INTO risk_events VALUES (?,?,?,?,?)", (time.time(), st.name, t.mint,
+                            "blokir" if not d.allowed else "catat", "; ".join(d.blocked_by + d.shadow)))
+            self.db.commit()
+        if not d.allowed:
+            log(f"[{st.name}] RISIKO blokir {t.symbol}: {'; '.join(d.blocked_by)}")
+            return
         sol = s.per_coin_usd / self.sol_usd
         net = sol * (1 - s.fee_pct) - s.tx_cost_sol
-        slip = self.slippage(t)
         entry = t.price * (1 + slip)
         qty = net / entry
         self.features.add(t, bought=True)
@@ -699,6 +722,7 @@ class Simulator:
                        kelly_stake=stake, remaining=qty, peak=t.price)
         st.positions.append(pos)
         st.opened_in_batch += 1
+        self.risk.on_open(st.name, t.mint, s.per_coin_usd)
         self.record_trade(pos, "BELI", "masuk", entry, qty, sol, s.per_coin_usd, kelly_stake=stake, slip=slip)
         # data token disimpan supaya posisi bisa dilanjutkan kalau simulator di-restart
         self.db.execute("INSERT OR REPLACE INTO position_meta(strategy,batch,mint,curve,launch,creator,dev_initial,created)"
@@ -711,7 +735,7 @@ class Simulator:
     def sell(self, pos, qty, reason):
         s = self.s
         qty = min(qty, pos.remaining)
-        slip = self.slippage(pos.token)
+        slip = self.slippage(pos.token, "sell")
         gross = qty * pos.token.price * (1 - slip) * (1 - s.fee_pct)
         net_sol = gross - s.tx_cost_sol if gross > s.tx_cost_sol else 0.0  # debu: ditinggalkan
         usd = net_sol * pos.sol_usd
@@ -766,6 +790,7 @@ class Simulator:
             (pos.strategy, pos.batch, pos.token.mint, pos.token.symbol, pos.opened, time.time(), pos.cost_usd,
              pos.proceeds_usd, pnl, ret, peak, reason, int(pos.token.complete), pos.kelly_stake))
         self.db.commit()
+        self.risk.on_close(pos.strategy, pos.cost_usd, pnl)
         st = self.strategies.get(pos.strategy)
         if st:
             st.n_closed += 1

@@ -19,6 +19,7 @@ import sys
 import numpy as np
 
 from config import DB_PATH, load_settings
+from costs import slippage as slip_model
 from strategies import build_variants
 
 SNAPS = (30, 60, 90, 180)
@@ -45,11 +46,11 @@ def simulate(path, T, c, s, tx_frac):
     before = [p for p in path if p[0] <= T - 8]
     ref = before[-1][1] if before else pts[0][1]
 
-    def slip(m, ref_m):
-        return min(s.slippage_max, s.slippage_min + s.slippage_k * (abs(m / ref_m - 1) if ref_m else 0))
+    def slip(m, ref_m, side):
+        return slip_model(s, abs(m / ref_m - 1) if ref_m else 0.0, side)
 
     a0, m0, _ = pts[0]
-    entry = m0 * (1 + slip(m0, ref))
+    entry = m0 * (1 + slip(m0, ref, "buy"))
     qty = (1 - s.fee_pct - tx_frac) / entry
     remaining, proceeds, peak, tp1, tp1_age, tp2 = qty, 0.0, m0, False, None, False
     last_m, last_change, hist = m0, a0, [(a0, m0)]
@@ -57,7 +58,7 @@ def simulate(path, T, c, s, tx_frac):
     def sell(q, m, a):
         nonlocal remaining, proceeds
         prev = [x for t, x in hist if t <= a - 8]
-        gross = q * m * (1 - slip(m, prev[-1] if prev else m)) * (1 - s.fee_pct)
+        gross = q * m * (1 - slip(m, prev[-1] if prev else m, "sell")) * (1 - s.fee_pct)
         proceeds += max(gross - tx_frac, 0.0)
         remaining -= q
 

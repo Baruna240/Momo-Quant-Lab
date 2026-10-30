@@ -222,7 +222,7 @@ td.num, th.num { text-align: right; }
     <span class="sim-badge">SIMULASI</span>
     <div class="scopes" id="scopes"></div>
     <a class="chip" href="/alt" title="Simulasi altcoin & koin besar">ALTCOIN <b>→</b></a>
-    <span class="themes" title="Ganti tema tampilan (data sama)"><span>TEMA</span><a href="/" class="on">TERMINAL</a><a href="/lab">ABYSS</a></span>
+    <span class="themes" title="Ganti tema tampilan (data sama)"><span>TEMA</span><a href="/" class="on">TERMINAL</a><a href="/lab">ABYSS</a><a href="/prism">PRISM</a></span>
     <div class="grow"></div>
     <span class="chip"><span class="live" id="live"></span><span id="live-txt">MEMUAT</span></span>
     <span class="chip">SOL <b id="sol">–</b></span>
@@ -234,7 +234,7 @@ td.num, th.num { text-align: right; }
   <div class="grid">
     <!-- HERO -->
     <section class="panel span-5 hero-panel">
-      <div class="ph"><span class="ix">01</span> PnL SEPANJANG WAKTU <span class="r" id="hero-scope"></span></div>
+      <div class="ph">PnL SEPANJANG WAKTU <span class="r" id="hero-scope"></span></div>
       <div class="hero-top" id="hero-sub"></div>
       <div class="hero" id="hero">$0.00</div>
       <div class="kv" id="kv"></div>
@@ -249,12 +249,12 @@ td.num, th.num { text-align: right; }
     <!-- COIN CHART + PERTUMBUHAN MODAL -->
     <section class="panel span-7 split">
       <div class="sub">
-        <div class="ph"><span class="ix">02</span> <span id="coin-title">CHART KOIN</span> <span class="tfs" id="coin-tf"><button data-m="15" aria-pressed="true">15 DTK</button><button data-m="60" aria-pressed="false">1 MNT</button><button data-m="300" aria-pressed="false">5 MNT</button><button data-m="line" aria-pressed="false">GARIS</button></span> <span class="r" id="coin-links"></span></div>
+        <div class="ph"><span id="coin-title">CHART KOIN</span> <span class="tfs" id="coin-tf"><button data-m="15" aria-pressed="true">15 DTK</button><button data-m="60" aria-pressed="false">1 MNT</button><button data-m="300" aria-pressed="false">5 MNT</button><button data-m="line" aria-pressed="false">GARIS</button></span> <span class="r" id="coin-links"></span></div>
         <div class="legend" id="coin-legend">Klik koin di feed atau tabel untuk melihat chart-nya.</div>
         <div class="chart coin" id="coin-chart"></div>
       </div>
       <div class="sub growth">
-        <div class="ph"><span class="ix">02B</span> PERTUMBUHAN MODAL <span class="r" id="g-scope"></span></div>
+        <div class="ph">PERTUMBUHAN MODAL <span class="r" id="g-scope"></span></div>
         <div class="gstats" id="g-stats"></div>
         <div class="legend" id="g-legend"></div>
         <div class="chart coin" id="g-chart"></div>
@@ -263,52 +263,52 @@ td.num, th.num { text-align: right; }
 
     <!-- PIPELINE -->
     <section class="panel span-12">
-      <div class="ph"><span class="ix">03</span> EXECUTION CYCLE <span class="r" id="pipe-r"></span></div>
+      <div class="ph">EXECUTION CYCLE <span class="r" id="pipe-r"></span></div>
       <div class="pipe" id="pipe"></div>
       <div class="proc" id="proc" aria-live="off"></div>
     </section>
 
     <!-- STRATEGY LAB -->
     <section class="panel span-12">
-      <div class="ph"><span class="ix">LAB</span> STRATEGY LAB · LEADERBOARD <span class="r">semua varian diuji pada koin yang sama · klik baris untuk fokus ke varian</span></div>
+      <div class="ph">STRATEGY LAB · LEADERBOARD <span class="r">semua varian diuji pada koin yang sama · klik baris untuk fokus ke varian</span></div>
       <div class="table-wrap" id="lab"></div>
     </section>
 
     <!-- EQUITY -->
     <section class="panel span-8">
-      <div class="ph"><span class="ix">04</span> KURVA EQUITY (PnL KUMULATIF, USD)</div>
+      <div class="ph">KURVA EQUITY (PnL KUMULATIF, USD)</div>
       <div class="legend" id="eq-legend"></div>
       <div class="chart" id="eq-chart"></div>
     </section>
 
     <!-- FEED -->
     <section class="panel span-4">
-      <div class="ph"><span class="ix">05</span> LIVE FEED <span class="r">40 transaksi terakhir</span></div>
+      <div class="ph">LIVE FEED <span class="r">40 transaksi terakhir</span></div>
       <div class="feed" id="feed"></div>
     </section>
 
     <!-- MATRIX -->
     <section class="panel span-6">
-      <div class="ph"><span class="ix">06</span> MATRIKS HASIL <span class="r">PnL · jumlah posisi</span></div>
+      <div class="ph">MATRIKS HASIL <span class="r">PnL · jumlah posisi</span></div>
       <div id="matrix"></div>
     </section>
 
     <!-- MONTE CARLO -->
     <section class="panel span-6">
-      <div class="ph"><span class="ix">07</span> MONTE CARLO · 5.000 PUTARAN <span class="r" id="mc-r"></span></div>
+      <div class="ph">MONTE CARLO · 5.000 PUTARAN <span class="r" id="mc-r"></span></div>
       <div id="mc"></div>
     </section>
 
     <!-- PEAKS -->
     <section class="panel span-4">
-      <div class="ph"><span class="ix">08</span> PUNCAK HARGA</div>
+      <div class="ph">PUNCAK HARGA</div>
       <div id="peaks"></div>
       <div class="foot" style="margin-top:8px">Setinggi apa koin sempat naik dari harga beli (belum tentu terjual di puncak).</div>
     </section>
 
     <!-- TABLES -->
     <section class="panel span-8">
-      <div class="ph"><span class="ix">09</span> POSISI</div>
+      <div class="ph">POSISI</div>
       <div class="tabs">
         <button class="tab" data-tab="open" aria-selected="true">SEDANG DIPEGANG</button>
         <button class="tab" data-tab="closed" aria-selected="false">SUDAH DITUTUP</button>

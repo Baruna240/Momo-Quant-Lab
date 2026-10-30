@@ -66,8 +66,9 @@ class Settings:
     tx_cost_sol: float = 0.0001         # biaya jaringan + priority fee per transaksi
     # slippage dinamis: minimal kecil, membesar kalau harga sedang bergerak cepat saat transaksi
     # slippage = min + k x |perubahan harga dalam 8 detik terakhir|, dibatasi maksimal
-    slippage_min: float = 0.005
-    slippage_k: float = 0.5
+    slippage_min: float = 0.005         # slippage dasar per sisi (model terkalibrasi, lihat costs.py)
+    slip_buy_k: float = 0.0             # beli: tidak bergantung gerak harga (nyata ~0%)
+    slip_sell_k: float = 0.2            # jual: + 0,2 x gerak harga 8 detik terakhir (nyata rata-rata ~3,4%)
     slippage_max: float = 0.10
     slip_lookback_sec: float = 8.0
 
@@ -79,6 +80,7 @@ class Settings:
     big_win_mult: float = 2.0           # selalu kirim notifikasi jika hasil >= 2x modal
     summary_every_min: float = 60.0     # ringkasan berkala ke Telegram
     backup_keep: int = 7                # simpan backup database harian 7 hari terakhir
+    risk_mode: str = "shadow"           # "shadow": batas risiko dicatat saja (riset); "enforce": benar-benar memblokir
 
     @property
     def per_coin_usd(self):
