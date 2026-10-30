@@ -24,6 +24,7 @@ class Settings:
     telegram_bot_token: str = ""
     telegram_chat_id: str = ""
     helius_api_key: str = ""
+    pumpportal_api_key: str = ""        # opsional: HANYA untuk data aliran transaksi (subscribeTokenTrade); tidak pernah dipakai trading
 
     # --- modal ---
     batch_budget_usd: float = 20.0      # modal per putaran

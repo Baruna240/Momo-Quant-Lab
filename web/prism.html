@@ -193,10 +193,10 @@ body[data-mode="alt"] [data-only="meme"], body[data-mode="meme"] [data-only="alt
     </div>
     <nav class="mk" aria-label="Pasar"><a href="/prism" id="mk-meme">Meme coin</a><a href="/prism-alt" id="mk-alt">Altcoin</a></nav>
     <nav class="tabs" aria-label="Bagian" data-only="meme">
-      <a href="#ringkasan">Ringkasan</a><a href="#meme">Leaderboard</a><a href="#biaya">Biaya &amp; risiko</a>
+      <a href="#ringkasan">Ringkasan</a><a href="#meme">Leaderboard</a><a href="#flow">Aliran &amp; Safety</a><a href="#biaya">Biaya &amp; risiko</a>
     </nav>
     <nav class="tabs" aria-label="Bagian" data-only="alt">
-      <a href="#ringkasan">Ringkasan</a><a href="#alt">Leaderboard</a><a href="#koin">Chart koin</a><a href="#uji">Backtest &amp; AI</a>
+      <a href="#ringkasan">Ringkasan</a><a href="#alt">Leaderboard</a><a href="#scan">Pemindai</a><a href="#koin">Chart koin</a><a href="#uji">Backtest &amp; AI</a>
     </nav>
     <div class="right">
       <span class="dot"><i id="d-meme"></i>meme</span>
@@ -261,6 +261,10 @@ body[data-mode="alt"] [data-only="meme"], body[data-mode="meme"] [data-only="alt
         <div class="h"><h2>Leaderboard altcoin &amp; futures</h2><span class="sub">klik baris untuk menampilkan kurva PnL · fee &amp; slippage = perkiraan dari pengaturan</span><span class="r">Sharpe/Sortino per transaksi</span></div>
         <div class="tbl-wrap"><table id="t-alt"></table></div>
       </div>
+      <div class="card s12" id="scan">
+        <div class="h"><h2>Pemindai multi-timeframe</h2><span class="sub">data candle sejak 2022 · klik koin untuk membuka chart-nya</span><span class="r" id="sc-when"></span></div>
+        <div class="tbl-wrap"><table id="t-scan"></table></div>
+      </div>
       <div class="card s12" id="koin">
         <div class="h"><h2 id="cc-title">Chart koin</h2>
           <span class="tfs" id="cc-tf"><button data-tf="1h" aria-pressed="true">1 jam</button><button data-tf="4h" aria-pressed="false">4 jam</button><button data-tf="1d" aria-pressed="false">1 hari</button></span>
@@ -286,6 +290,24 @@ body[data-mode="alt"] [data-only="meme"], body[data-mode="meme"] [data-only="alt
         <div class="h"><h2>AI futures &amp; regime pasar</h2></div>
         <div class="ai" id="ai"></div>
         <div class="note" id="regime"></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="flow" data-only="meme">
+    <div class="grid">
+      <div class="card s5">
+        <div class="h"><h2>Aliran transaksi</h2><span class="sub">setiap beli/jual token baru, 20 menit pertama</span><span class="r" id="fl-live"></span></div>
+        <div class="limits" id="fl-kpi"></div>
+        <div class="mut" style="font-size:12px;margin:14px 0 6px">Label hasil 20 menit</div>
+        <div class="flow"><div class="bar" id="fl-bar"></div><div class="keys" id="fl-keys"></div></div>
+        <div class="note" id="fl-note"></div>
+      </div>
+      <div class="card s7">
+        <div class="h"><h2>Uji agent Safety</h2><span class="sub">apakah skor risiko di detik ke-60 benar-benar memisahkan rug?</span></div>
+        <div class="calib" id="sf-buckets"></div>
+        <div class="mut" style="font-size:12px;margin:14px 0 6px">Token terakhir yang selesai dinilai</div>
+        <div class="tbl-wrap"><table id="sf-recent"></table></div>
       </div>
     </div>
   </section>
@@ -410,12 +432,13 @@ function render() {
   renderVerdict();
   if (MODE === "meme") {
     table("t-meme", D.meme, MEME_COLS, "meme", D.labels, true);
-    renderCalib(); renderRisk();
+    renderCalib(); renderRisk(); renderFlow();
     renderHeat("heat", D.meme, D.labels);
     renderChart("chart", "c-sub", D.curves, D.labels);
   } else {
     table("t-alt", D.alt, MEME_COLS.filter(([k]) => k !== "risk_net"), "alt", D.alt_labels, true);
     renderBacktest(); renderAI();
+    renderScan();
     renderHeat("heat-alt", D.alt, D.alt_labels);
     renderChart("chart-alt", "c-sub-alt", D.alt_curves, D.alt_labels);
     CC.render();
@@ -556,6 +579,66 @@ function renderCalib() {
     jatuh/terbang ekstrem dalam hitungan detik (rata-rata ikut terseret).`;
 }
 
+// ---------------------------------------------------------------- pemindai altcoin multi-timeframe
+const TCOL = { "naik": "#a3e635", "turun": "#ff6b6b", "campuran": "#fbbf24", "data kurang": "#4a4859" };
+function trendDots(tr) {
+  return ["1h", "4h", "1d"].map(tf => `<span title="${tf}: ${esc(tr?.[tf] || "–")}" style="display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:3px;background:${TCOL[tr?.[tf]] || "#2a2935"}"></span>`).join("");
+}
+function renderScan() {
+  const rows = D.scan || [];
+  $("sc-when").textContent = D.scan_at ? "dihitung " + new Date(D.scan_at * 1000).toLocaleTimeString("id-ID") : "menunggu perhitungan pertama…";
+  if (!rows.length) { $("t-scan").innerHTML = `<tbody><tr><td class="mut" style="font-family:var(--sans)">Belum ada data. Jalankan <code>python alt_data.py</code>; hasil muncul ≤ 5 menit kemudian.</td></tr></tbody>`; return; }
+  const rsiCls = v => v == null ? "mut" : v >= 70 ? "loss" : v <= 30 ? "win" : "";
+  const p = (v, d = 1) => v == null ? "–" : (v >= 0 ? "+" : "") + (100 * v).toFixed(d) + "%";
+  $("t-scan").innerHTML = `<thead><tr><th>Koin</th><th>Trend 1h·4h·1d</th><th>Selaras</th><th>Regime 4h</th><th>Volatilitas</th><th>RSI 1h</th><th>RSI 1d</th>
+    <th>ADX 4h</th><th>RVOL 1h</th><th>vs VWAP</th><th>ATR 1d</th><th>Korelasi BTC</th><th>ke support</th><th>ke resistance</th><th>Breakout 4h</th></tr></thead><tbody>` +
+    rows.map(r => { const b = r.brk4h || {};
+      return `<tr data-sym="${esc(r.symbol)}"><td>${r.rank ? `<span class="mut">#${r.rank}</span> ` : ""}${esc(r.base)}<small>${r.close == null ? "" : r.close.toPrecision(5)}</small></td>
+      <td>${trendDots(r.trend)}</td>
+      <td><span class="chip" style="color:${r.mtf === "naik" ? "#a3e635" : r.mtf === "turun" ? "#ff6b6b" : "#7c7a8e"}">${esc(r.mtf)}</span></td>
+      <td>${esc(r.regime?.["4h"] || "–")}</td><td class="${r.vol === "tinggi" ? "warn" : "mut"}">${esc(r.vol || "–")}</td>
+      <td class="${rsiCls(r.rsi1h)}">${fx(r.rsi1h, 0)}</td><td class="${rsiCls(r.rsi1d)}">${fx(r.rsi1d, 0)}</td>
+      <td class="${(r.adx4h || 0) >= 25 ? "" : "mut"}">${fx(r.adx4h, 0)}</td>
+      <td class="${(r.rvol1h || 0) >= 2 ? "warn" : "mut"}">${fx(r.rvol1h, 2)}</td><td class="${cls(r.vwap1h)}">${p(r.vwap1h, 2)}</td>
+      <td class="mut">${p(r.atr1d).replace("+", "")}</td><td>${fx(r.corr, 2)}</td>
+      <td class="mut">${r.sup == null ? "–" : "−" + (100 * r.sup).toFixed(1) + "%"}</td><td class="mut">${r.res == null ? "–" : "+" + (100 * r.res).toFixed(1) + "%"}</td>
+      <td>${b.breakout ? `<span class="${b.dir === "naik" ? "win" : "loss"}">${b.dir === "naik" ? "▲" : "▼"} ${b.bars_ago}c</span>${b.retest ? ` <span class="mut">retest</span>` : ""}` : "<span class='mut'>–</span>"}</td></tr>`; }).join("") + "</tbody>";
+  $("t-scan").querySelectorAll("tbody tr[data-sym]").forEach(tr => tr.onclick = () => {
+    CC.select(tr.dataset.sym);
+    $("koin").scrollIntoView({ behavior: "smooth", block: "start" });
+  });
+}
+
+const LCOL = { rug: "#ff6b6b", dump: "#fb923c", datar: "#4a4859", normal: "#60a5fa", lulus: "#a3e635" };
+function renderFlow() {
+  const f = D.flow || {}, labels = f.labels || {}, done = f.done || 0;
+  const modeTxt = f.mode === 1 ? "stream PumpPortal" : f.mode === 2 ? "sampel 1 dari 5 token (RPC publik)" : "nonaktif";
+  $("fl-live").innerHTML = `<span class="dot"><i class="${f.tracking ? "ok" : "bad"}"></i>${f.tracking || 0} diikuti · ${modeTxt}</span>`;
+  $("fl-kpi").innerHTML = [["Transaksi sesi ini", (f.trades || 0).toLocaleString("id-ID")], ["Token berlabel", done.toLocaleString("id-ID")],
+    ["Transaksi mentah", (f.raw || 0).toLocaleString("id-ID")], ["SOL blok pertama (median)", f.missed_med == null ? "–" : f.missed_med.toFixed(2)]]
+    .map(([k, v]) => `<div><b>${v}</b><span>${k}</span></div>`).join("");
+  const order = ["rug", "dump", "datar", "normal", "lulus"], tot = done || 1;
+  $("fl-bar").innerHTML = order.map(k => `<i style="width:${100 * (labels[k] || 0) / tot}%;background:${LCOL[k]}" title="${k} ${labels[k] || 0}"></i>`).join("");
+  $("fl-keys").innerHTML = order.map(k => `<span style="--c:${LCOL[k]}">${k} <b class="num">${labels[k] || 0}</b>${done ? ` (${Math.round(100 * (labels[k] || 0) / tot)}%)` : ""}</span>`).join("");
+  $("fl-note").innerHTML = done ? `${f.missed_1 == null ? "" : `<b>${Math.round(100 * f.missed_1)}%</b> token sudah dibeli &gt; 1 SOL di blok pertama, sebelum bot biasa sempat melihat (tanda bundle/sniper). `}
+     Label: <b>rug</b> = dev jual ≥50% lalu harga jatuh ≥75% dari puncak · <b>dump</b> = jatuh ≥80% tanpa dev · <b>datar</b> = tidak pernah naik 30%.`
+    : "Token pertama selesai dilabeli 20 menit setelah simulator mulai merekam.";
+  const bk = f.buckets || [], mxBad = 1;
+  const scored = bk.reduce((s, b) => s + b.n, 0);
+  $("sf-buckets").innerHTML = bk.map(b => `<div class="row" style="grid-template-columns:92px 1fr 70px"><span>skor ${b.lo}–${b.hi}</span>
+      <div class="track" title="${b.n} token · ${b.bad} rug/dump"><i class="r" style="top:3px;bottom:3px;background:${b.n ? (b.bad / b.n > .5 ? "#ff6b6b" : b.bad / b.n > .25 ? "#fbbf24" : "#2dd4bf") : "transparent"};width:${b.n ? 100 * b.bad / b.n / mxBad : 0}%"></i></div>
+      <span class="num">${b.n ? Math.round(100 * b.bad / b.n) + "%" : "–"} <span class="mut">(${b.n})</span></span></div>`).join("") +
+    `<div class="mut" style="font-size:12px">${scored >= 30 ? "Persen = porsi token yang berakhir rug/dump. Skor berguna kalau persennya naik dari atas ke bawah."
+      : `Penilaian dimulai setelah 30 token punya skor (sekarang ${scored}). Skor belum dipakai untuk keputusan beli.`}</div>`;
+  $("sf-recent").innerHTML = `<thead><tr><th>Token</th><th>Skor</th><th>Label</th><th>Puncak</th><th>Dev jual</th><th>Alasan utama</th></tr></thead><tbody>` +
+    (f.recent || []).map(r => `<tr><td>${esc(r.symbol || r.mint.slice(0, 6))}<small>${esc(r.mint.slice(0, 8))}…</small></td>
+      <td class="${r.safety60 >= 40 ? "loss" : r.safety60 >= 20 ? "warn" : "win"}">${r.safety60 == null ? "–" : Math.round(r.safety60)}</td>
+      <td><span class="chip" style="color:${LCOL[r.label] || "#7c7a8e"}">${esc(r.label || "–")}</span></td>
+      <td>${fx(r.peak_mult)}x</td><td>${r.dev_sold_frac == null ? "–" : pct(r.dev_sold_frac)}</td>
+      <td style="font-family:var(--sans);text-align:left;white-space:normal;min-width:220px">${esc((r.safety60_reasons || []).slice(0, 2).join(" · ")) || "<span class='mut'>tidak ada tanda bahaya</span>"}</td></tr>`).join("") +
+    "</tbody>";
+}
+
 function renderRisk() {
   const L = D.limits, rk = D.risk || {};
   $("rk-mode").innerHTML = D.kill ? `<span class="loss">KILL SWITCH AKTIF</span>` : `mode ${esc(D.risk_mode)}`;
@@ -687,7 +770,7 @@ const CC = (() => {
     $("cc-legend").innerHTML = `<span>${when}</span><span>O <b>${px(d.open)}</b></span><span>H <b>${px(d.high)}</b></span><span>L <b>${px(d.low)}</b></span>` +
       `<span>C <b class="${cls(chg)}">${px(d.close)}</b></span><span class="${cls(chg)}">${chg >= 0 ? "+" : ""}${chg.toFixed(2)}%</span><span class="mut">${nTrades} transaksi simulasi di koin ini</span>`;
   }
-  return { render: () => load().catch(() => { $("cc-legend").textContent = "Gagal memuat chart, dicoba lagi otomatis."; }) };
+  return { render: () => load().catch(() => { $("cc-legend").textContent = "Gagal memuat chart, dicoba lagi otomatis."; }), select };
 })();
 
 // ---------------------------------------------------------------- konstelasi 8 agent (canvas)

@@ -383,6 +383,46 @@ def _ro(path):
     return c
 
 
+# pemindai altcoin multi-timeframe (Fase 4): dihitung di latar belakang supaya halaman tetap cepat
+SCAN = {"at": 0, "rows": [], "err": None}
+
+
+def scan_loop():
+    import threading  # noqa: F401  (dipakai oleh pemanggil)
+    from alt_data import HIST_DB
+    from indicators import analyze
+    while True:
+        try:
+            if HIST_DB.exists():
+                hdb = sqlite3.connect(f"file:{HIST_DB}?mode=ro", uri=True, timeout=10)
+                ranks = {}
+                alt = _ro(ALT_DB)
+                if alt is not None:
+                    ranks = {r["base"]: r["rank"] for r in alt.execute("SELECT base, rank FROM alt_market")}
+                    alt.close()
+                bases = [r[0].split("/")[0] for r in hdb.execute("SELECT DISTINCT symbol FROM ohlcv WHERE tf='1d'")]
+                rows = []
+                for b in bases:
+                    a = analyze(b, hdb)
+                    if not a:
+                        continue
+                    t = a["tf"]
+                    h1, h4, d1 = t.get("1h", {}), t.get("4h", {}), t.get("1d", {})
+                    px = h1.get("close") or d1.get("close")
+                    rows.append({"base": b, "symbol": b + "USDT", "rank": ranks.get(b), "mtf": a["mtf_align"], "close": px,
+                                 "trend": {tf: t[tf]["trend"] for tf in t}, "regime": {tf: t[tf]["regime"] for tf in t},
+                                 "vol": d1.get("volatility"), "rsi1h": h1.get("rsi"), "rsi1d": d1.get("rsi"),
+                                 "adx4h": h4.get("adx"), "rvol1h": h1.get("rvol"), "vwap1h": h1.get("vwap_dist"),
+                                 "atr1d": d1.get("atr_pct"), "corr": d1.get("btc_corr"), "brk4h": h4.get("breakout"),
+                                 "sup": (px / d1["support"] - 1) if px and d1.get("support") else None,
+                                 "res": (d1["resistance"] / px - 1) if px and d1.get("resistance") else None})
+                hdb.close()
+                SCAN.update(at=time.time(), rows=sorted(rows, key=lambda r: (r["rank"] is None, r["rank"] or 0)), err=None)
+        except Exception as e:  # pemindai gagal tidak boleh menjatuhkan dashboard
+            SCAN["err"] = f"{type(e).__name__}: {e}"
+        time.sleep(300)
+
+
 def quant_summary(conn):
     from metrics import alt_trades, leaderboard, meme_trades
     from risk import KILL_FILE, RiskLimits
@@ -461,6 +501,32 @@ def quant_summary(conn):
                 leaders = [dict(r) for r in lab.execute("SELECT wallet, picked FROM leaders")]
         finally:
             lab.close()
+    # aliran transaksi per token + skor Safety (Fase 3, flow.db)
+    fl = _ro(BASE_DIR / "flow.db")
+    out["flow"] = {"tracking": int(stats.get("flow_tracking", 0)), "trades": int(stats.get("flow_trades", 0)),
+                   "mode": int(stats.get("flow_on", 0))}
+    out["scan"], out["scan_at"] = SCAN["rows"], SCAN["at"]
+    if fl is not None:
+        try:
+            rows = [dict(r) for r in fl.execute("SELECT mint, symbol, created, missed_sol, n_trades, n_traders, label, safety60,"
+                                                " safety60_reasons, peak_mult, dev_sold_frac FROM token_flow WHERE finalized IS NOT NULL")]
+            labels = {}
+            for r in rows:
+                labels[r["label"]] = labels.get(r["label"], 0) + 1
+            buckets = []
+            for lo, hi in ((0, 20), (20, 40), (40, 60), (60, 101)):
+                b = [r for r in rows if r["safety60"] is not None and lo <= r["safety60"] < hi]
+                buckets.append({"lo": lo, "hi": min(hi, 100), "n": len(b),
+                                "bad": sum(r["label"] in ("rug", "dump") for r in b)})
+            missed = sorted(r["missed_sol"] for r in rows if r["missed_sol"] is not None)
+            recent = sorted(rows, key=lambda r: r["created"], reverse=True)[:8]
+            out["flow"].update({"done": len(rows), "labels": labels, "buckets": buckets,
+                                "missed_med": missed[len(missed) // 2] if missed else None,
+                                "missed_1": sum(m > 1 for m in missed) / len(missed) if missed else None,
+                                "raw": fl.execute("SELECT COUNT(*) FROM token_trades").fetchone()[0],
+                                "recent": [{**r, "safety60_reasons": json.loads(r["safety60_reasons"] or "[]")} for r in recent]})
+        finally:
+            fl.close()
     sim_hb = stats.get("heartbeat")
     # varian terbaik hanya dari yang masih aktif (varian yang dipensiunkan tetap tampil di tabel, tapi tidak dinilai juara)
     meme_best = max((r for r in out["meme"] if r.get("n") and r["strategy"] in VARIANTS), key=lambda r: r.get("expectancy") or -1e9,
@@ -471,11 +537,11 @@ def quant_summary(conn):
         {"id": "supervisor", "name": "Supervisor", "kind": "kode", "ok": alive(sim_hb, 60) and alive(alt_hb, 300),
          "metric": f"meme {'aktif' if alive(sim_hb, 60) else 'MATI'} · altcoin {'aktif' if alive(alt_hb, 300) else 'MATI'}"},
         {"id": "meme", "name": "Meme Scanner", "kind": "kode", "ok": alive(sim_hb, 60),
-         "metric": f"{int(stats.get('tokens_seen', 0))} token sesi ini · {out.get('features', {}).get('last_hour', 0)} direkam/jam"},
+         "metric": f"{int(stats.get('tokens_seen', 0))} token sesi ini · {out['flow']['tracking']} diikuti live"},
         {"id": "alt", "name": "Altcoin Scanner", "kind": "kode", "ok": alive(alt_hb, 300),
          "metric": f"{out.get('alt_market', 0)} koin · EMA/RSI/ATR/trend"},
         {"id": "safety", "name": "Safety", "kind": "kode", "ok": True,
-         "metric": f"anti-rug tolak {int(stats.get('antirug_blocked', 0))} sesi ini"},
+         "metric": f"skor 4 lapis · {out['flow'].get('done', 0)} token berlabel"},
         {"id": "smart", "name": "Smart Money", "kind": "kode", "ok": bool(leaders),
          "metric": f"{len(leaders)} leader dipantau (forward test)"},
         {"id": "regime", "name": "Market Regime", "kind": "kode", "ok": bool(regime),
@@ -548,6 +614,8 @@ def main():
     url = f"http://localhost:{PORT}"
     try:
         server = ThreadingHTTPServer(("127.0.0.1", PORT), Handler)
+        import threading
+        threading.Thread(target=scan_loop, daemon=True).start()
     except OSError:
         print(f"Dashboard sudah berjalan di jendela lain. Buka {url} di browser.")
         if "--no-browser" not in sys.argv:

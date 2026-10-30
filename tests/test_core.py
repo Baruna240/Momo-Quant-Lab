@@ -13,6 +13,13 @@ from meme_ai import simulate  # noqa: E402
 import metrics  # noqa: E402
 import risk  # noqa: E402
 import costs  # noqa: E402
+import flow  # noqa: E402
+from meme_engine import ExitState, exit_orders  # noqa: E402
+import safety  # noqa: E402
+import indicators as ind  # noqa: E402
+import altcoin  # noqa: E402
+import numpy as np  # noqa: E402
+import tempfile  # noqa: E402
 from report import kelly  # noqa: E402
 from strategies import RETIRED, build_variants  # noqa: E402
 from wallet_lab import build_trips, parse_tx, sop_exit, trade_price, wallet_stats  # noqa: E402
@@ -236,6 +243,143 @@ class CostModelTest(unittest.TestCase):
         self.assertAlmostEqual(costs.slippage(s, 0.30, "sell"), s.slippage_min + s.slip_sell_k * 0.30)
         self.assertEqual(costs.slippage(s, 5.0, "sell"), s.slippage_max)             # selalu dibatasi
         self.assertLess(costs.slippage(s, 0.1, "buy"), costs.slippage(s, 0.1, "sell"))
+
+
+class FlowTest(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.ft = flow.FlowTracker(Path(self.tmp.name) / "f.db", clock=lambda: 0)
+        self.tok = SimpleNamespace(mint="M", symbol="X", launch_price=30 / 1000)
+
+    def tearDown(self):
+        self.ft.db.close()
+        self.tmp.cleanup()
+
+    def trade(self, t, who, side, sol, tok, v_sol, v_tok=1000.0):
+        self.ft.on_trade({"mint": "M", "txType": side, "traderPublicKey": who, "solAmount": sol, "tokenAmount": tok,
+                          "vSolInBondingCurve": v_sol, "vTokensInBondingCurve": v_tok, "pool": "pump"}, now=t)
+
+    def test_snapshot_missed_sol_and_rug_label(self):
+        self.ft.start(self.tok, "DEV", dev_tokens=100.0, launch_v_sol=30.0, now=0)
+        self.assertEqual(self.ft.take_changes(), (["M"], []))
+        self.trade(1.0, "A", "buy", 1.0, 10, 34.0)      # 3 SOL masuk sebelum transaksi pertama yang kita lihat
+        self.trade(2.0, "B", "buy", 1.0, 10, 35.0)
+        self.trade(5.0, "A", "sell", 0.5, 5, 34.5)      # A beli lalu jual = round-trip
+        self.trade(20.0, "DEV", "sell", 2.0, 80, 32.5)  # dev jual 80%
+        self.trade(40.0, "C", "buy", 0.1, 1, 6.0)       # harga jatuh jauh dari puncak
+        it = self.ft.items["M"]
+        self.assertAlmostEqual(it["missed"], 3.0)
+        snap = flow.snapshot(it["raw"], 60, "DEV", 100.0, set())
+        self.assertEqual((snap["n_buy"], snap["n_sell"], snap["buyers"], snap["snipers"]), (3, 2, 3, 2))
+        self.assertEqual(snap["round_trippers"], 1)
+        self.assertAlmostEqual(snap["dev_sell_frac"], 0.8)
+        self.ft.tick(now=flow.TRACK_SEC + 1)
+        row = self.ft.db.execute("SELECT label, dev_sold_frac, n_trades FROM token_flow WHERE mint='M'").fetchone()
+        self.assertEqual(row, ("rug", 0.8, 5))
+        self.assertEqual(self.ft.take_changes(), ([], ["M"]))   # berhenti berlangganan setelah 20 menit
+
+    def test_label_rules(self):
+        self.assertEqual(flow.label_token(3.0, 0.5, 2.0, 0.0, True), "lulus")
+        self.assertEqual(flow.label_token(1.1, 0.9, 1.0, 0.0, False), "datar")
+        self.assertEqual(flow.label_token(2.0, 0.1, 0.2, 0.1, False), "dump")
+        self.assertEqual(flow.label_token(2.0, 0.6, 1.5, 0.0, False), "normal")
+
+    def test_safety_layers_add_up_and_cap(self):
+        clean, why = safety.assess({"buyers": 30, "n_buy": 30, "n_sell": 10, "buy_ratio": 0.7, "top1_share": 0.1}, {}, 0.2)
+        self.assertEqual((clean, why), (0.0, []))
+        bad, why = safety.assess({"buyers": 3, "n_buy": 6, "n_sell": 6, "buy_ratio": 0.3, "top1_share": 0.6, "wash_share": 0.5,
+                                  "same_size": 0.8, "snipers": 9, "serial_snipers": 4, "dev_sell_frac": 0.5},
+                                 {"creator_n24": 5, "dev_pct": 20, "name_n1h": 3}, 5.0, {"top1": 0.3, "top5": 0.6})
+        self.assertEqual(bad, 100.0)
+        self.assertGreater(len(why), 8)
+
+
+class ExitEngineTest(unittest.TestCase):
+    RULES = SimpleNamespace(stop_loss=0.4, tp1_mult=2.0, tp1_sell=0.5, tp2_mult=4.0, tp2_sell=0.25, trailing_stop=0.3,
+                            max_hold_min=30, max_hold_after_tp_min=180, stale_min=10)
+
+    def play(self, prices, step=10):
+        st = ExitState(qty0=100, remaining=100, entry=1.0, peak=1.0, opened=0, last_change=0)
+        out, last = [], 1.0
+        for i, px in enumerate(prices, 1):
+            now = i * step
+            if px != last:
+                st.last_change, last = now, px
+            for q, why in exit_orders(self.RULES, st, px, now):
+                st.remaining -= q
+                out.append((round(q, 6), why))
+            if st.remaining <= 1e-9:
+                break
+        return out, st
+
+    def test_stop_loss(self):
+        self.assertEqual(self.play([0.9, 0.59])[0], [(100, "stop loss")])
+
+    def test_tp1_tp2_then_trailing(self):
+        out, _ = self.play([2.1, 4.5, 3.0])
+        self.assertEqual(out, [(50, "TP1 2x"), (25, "TP2 4x"), (25, "trailing stop")])
+
+    def test_time_limit_after_tp1_now_applies_everywhere(self):
+        prices = [2.1] + [2.0 + 0.001 * i for i in range(1, 200)]      # naik pelan terus: tidak kena trailing / koin mati
+        out, _ = self.play(prices, step=60)
+        self.assertEqual(out[-1][1], "batas waktu")
+        self.assertEqual(len(out), 2)
+
+    def test_stale_coin(self):
+        self.assertEqual(self.play([1.1] * 70, step=10)[0], [(100, "koin mati (harga diam)")])
+
+    def test_replay_uses_same_engine(self):
+        # replay (meme_ai.simulate) harus menghasilkan keluaran yang sama dengan menjalankan mesin langsung
+        s = SimpleNamespace(fee_pct=0.0, slippage_min=0.0, slippage_max=0.0, slip_buy_k=0.0, slip_sell_k=0.0)
+        path = [(0, 1.0, 0), (10, 2.1, 0), (20, 4.5, 0), (30, 3.0, 0)]
+        ret = simulate(path, 0, self.RULES, s, 0.0)
+        self.assertAlmostEqual(ret, 0.5 * 2.1 + 0.25 * 4.5 + 0.25 * 3.0)
+
+
+class IndicatorTest(unittest.TestCase):
+    def walk(self, n=800, seed=7, drift=0.0):
+        rng = np.random.default_rng(seed)
+        c = 100 * np.exp(np.cumsum(rng.normal(drift, 0.01, n)))
+        h, l = c * (1 + rng.uniform(0, 0.01, n)), c * (1 - rng.uniform(0, 0.01, n))
+        return c, h, l, rng.uniform(100, 200, n)
+
+    def test_matches_existing_altcoin_engine(self):
+        c, h, l, _ = self.walk()
+        self.assertAlmostEqual(ind.rsi(c)[-1], altcoin.rsi(list(c))[-1], places=6)
+        self.assertAlmostEqual(ind.atr(h, l, c)[-1], altcoin.atr(list(h), list(l), list(c))[-1], places=6)
+        self.assertAlmostEqual(ind.ema(c, 50)[-1], altcoin.ema(list(c), 50)[-1], places=9)
+
+    def test_basic_properties(self):
+        up = np.linspace(1, 2, 300)
+        self.assertEqual(ind.rsi(up)[-1], 100.0)
+        flat = np.full(300, 5.0)
+        self.assertAlmostEqual(ind.ema(flat, 20)[-1], 5.0)
+        self.assertAlmostEqual(np.nan_to_num(ind.macd(flat)[2])[-1], 0.0)
+        self.assertAlmostEqual(ind.vwap(flat, flat, flat, np.ones(300), np.arange(300) * 3600)[-1], 5.0)
+        self.assertAlmostEqual(ind.rvol(np.r_[np.ones(30), 3.0])[-1], 3.0)
+        a = np.random.default_rng(1).normal(0, 1, 200)
+        self.assertAlmostEqual(ind.rolling_corr(a, a, 50)[-1], 1.0)
+
+    def test_regime_and_trend(self):
+        c, h, l, _ = self.walk(drift=0.003)
+        r = ind.regime(c, h, l)
+        self.assertEqual(r["direction"], "trend naik")
+        c2, h2, l2, _ = self.walk(drift=-0.003)
+        self.assertEqual(ind.regime(c2, h2, l2)["direction"], "trend turun")
+
+    def test_breakout_and_retest(self):
+        c = np.r_[np.full(60, 10.0), 10.6, 10.5, 10.05, 10.4]           # tembus 10, turun menyentuh 10, naik lagi
+        h, l = c + 0.05, c - 0.05
+        l[-2] = 10.02
+        a = np.full(len(c), 0.5)
+        b = ind.breakout_retest(h, l, c, a, [{"price": 10.0, "touches": 3, "kind": "R"}])
+        self.assertEqual((b["breakout"], b["dir"], b["retest"]), (10.0, "naik", True))
+
+    def test_levels_cluster_repeated_highs(self):
+        c = np.r_[np.tile(np.r_[np.linspace(9, 10, 10), np.linspace(10, 9, 10)], 6)]
+        lv = ind.levels(c, c, c, atr_now=0.1, k=3)
+        self.assertAlmostEqual(lv[0]["price"], 10.0, places=6)
+        self.assertGreaterEqual(lv[0]["touches"], 5)
 
 
 if __name__ == "__main__":

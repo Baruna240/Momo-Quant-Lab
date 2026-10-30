@@ -20,6 +20,7 @@ import numpy as np
 
 from config import DB_PATH, load_settings
 from costs import slippage as slip_model
+from meme_engine import ExitState, exit_orders
 from strategies import build_variants
 
 SNAPS = (30, 60, 90, 180)
@@ -52,43 +53,26 @@ def simulate(path, T, c, s, tx_frac):
     a0, m0, _ = pts[0]
     entry = m0 * (1 + slip(m0, ref, "buy"))
     qty = (1 - s.fee_pct - tx_frac) / entry
-    remaining, proceeds, peak, tp1, tp1_age, tp2 = qty, 0.0, m0, False, None, False
-    last_m, last_change, hist = m0, a0, [(a0, m0)]
+    st = ExitState(qty0=qty, remaining=qty, entry=entry, peak=m0, opened=a0, last_change=a0)
+    proceeds, last_m, hist = 0.0, m0, [(a0, m0)]
 
     def sell(q, m, a):
-        nonlocal remaining, proceeds
+        nonlocal proceeds
         prev = [x for t, x in hist if t <= a - 8]
         gross = q * m * (1 - slip(m, prev[-1] if prev else m, "sell")) * (1 - s.fee_pct)
         proceeds += max(gross - tx_frac, 0.0)
-        remaining -= q
+        st.remaining -= q
 
     for a, m, _ in pts[1:]:
         hist.append((a, m))
         if m != last_m:
-            last_change, last_m = a, m
-        peak = max(peak, m)
-        mult = m / entry
-        held = (a - a0) / 60
-        if not tp1:
-            if mult <= 1 - c.stop_loss:
-                sell(remaining, m, a); break
-            if mult >= c.tp1_mult:
-                tp1, tp1_age = True, a
-                sell(min(qty * c.tp1_sell, remaining), m, a)
-            elif held >= c.max_hold_min:
-                sell(remaining, m, a); break
-        if tp1 and remaining > 1e-12:
-            if not tp2 and mult >= c.tp2_mult:
-                tp2 = True
-                sell(min(qty * c.tp2_sell, remaining), m, a)
-            if remaining > 1e-12 and m <= peak * (1 - c.trailing_stop):
-                sell(remaining, m, a); break
-        if remaining > 1e-12 and a - last_change >= c.stale_min * 60:
-            sell(remaining, m, a); break
-        if remaining <= 1e-12:
+            st.last_change, last_m = a, m
+        for q, _reason in exit_orders(c, st, m, a):   # aturan jual yang sama persis dengan simulator live
+            sell(q, m, a)
+        if st.remaining <= qty * 1e-9:
             break
-    if remaining > 1e-12:   # data habis (menit ke-20): jual di harga terakhir
-        sell(remaining, pts[-1][1], pts[-1][0])
+    if st.remaining > qty * 1e-9:   # data habis (menit ke-20): jual di harga terakhir
+        sell(st.remaining, pts[-1][1], pts[-1][0])
     return proceeds
 
 

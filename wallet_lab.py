@@ -415,7 +415,7 @@ def backtest(entries):
     s = load_settings()
     tx_frac = s.tx_cost_sol * s.sol_usd_fallback / s.per_coin_usd
     base = {k: getattr(s, k) for k in ("stop_loss", "tp1_mult", "tp1_sell", "tp2_mult", "tp2_sell", "trailing_stop",
-                                       "max_hold_min", "stale_min")}
+                                       "max_hold_min", "max_hold_after_tp_min", "stale_min")}
     sim = sqlite3.connect(f"file:{DB_PATH}?mode=ro", uri=True)
     sim.row_factory = sqlite3.Row
     rows = [dict(r) for r in sim.execute("""SELECT * FROM token_features WHERE ver = 2 AND finalized = 1 AND path IS NOT NULL

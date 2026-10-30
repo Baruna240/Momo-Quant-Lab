@@ -25,6 +25,10 @@ from features import POLL_SEC as FEATURE_POLL_SEC, FeatureTracker
 from altcoin import alt_status_text
 from risk import RiskLimits, RiskManager
 from costs import SLIP_MODEL_VERSION, slippage as slip_model
+from flow import PUBLIC_RPC, SAMPLE_EVERY as FLOW_SAMPLE_EVERY, FlowTracker
+from wallet_lab import Rpc as PublicRpc
+from meme_engine import ExitState, exit_orders
+from safety import assess as safety_assess
 
 PUMP_WS = "wss://pumpportal.fun/api/data"
 DEX_URL = "https://api.dexscreener.com/latest/dex/tokens/"
@@ -184,6 +188,10 @@ class Simulator:
             self.db.execute("INSERT OR REPLACE INTO stats(key, value) VALUES('slip_model_since', ?)", (time.time(),))
         self.db.commit()
         self.features = FeatureTracker(self.db)
+        self.flow_on = bool(settings.pumpportal_api_key)   # subscribeTokenTrade butuh API key PumpPortal
+        # aliran transaksi per token (flow.db) + skor Safety di detik ke-60.
+        # Tanpa API key: mode sampel gratis (1 dari 5 token dibaca ulang dari blockchain lewat RPC publik Solana)
+        self.flow = FlowTracker(sample_every=0 if self.flow_on else FLOW_SAMPLE_EVERY)
         self.auto_base = {n: st.cfg for n, st in self.strategies.items() if st.cfg.mode == "auto"}
         for name in self.auto_base:
             st = self.strategies[name]
@@ -349,18 +357,44 @@ class Simulator:
         backoff = 2
         while True:
             try:
-                async with websockets.connect(PUMP_WS, open_timeout=20, ping_interval=20) as ws:
+                url = PUMP_WS + (f"?api-key={self.s.pumpportal_api_key}" if self.flow_on else "")
+                async with websockets.connect(url, open_timeout=20, ping_interval=20) as ws:
                     await ws.send(json.dumps({"method": "subscribeNewToken"}))
-                    log("Terhubung ke feed token baru pump.fun")
+                    again = self.flow.active() if self.flow_on else []
+                    if again:   # sambung ulang: lanjutkan langganan transaksi token yang masih diikuti
+                        await ws.send(json.dumps({"method": "subscribeTokenTrade", "keys": again}))
+                    self.flow.take_changes()
+                    log("Terhubung ke feed token baru pump.fun" + (" + aliran transaksi" if self.flow_on else
+                                                                     " (aliran transaksi nonaktif: PUMPPORTAL_API_KEY kosong)"))
                     backoff = 2
-                    async for msg in ws:
-                        d = json.loads(msg)
-                        if d.get("txType") == "create" and d.get("pool", "pump") == "pump":
-                            self.on_new_token(d)
+                    syncer = asyncio.create_task(self.flow_subscriber(ws)) if self.flow_on else None
+                    try:
+                        async for msg in ws:
+                            d = json.loads(msg)
+                            tx = d.get("txType")
+                            if tx == "create" and d.get("pool", "pump") == "pump":
+                                self.on_new_token(d)
+                            elif tx in ("buy", "sell"):
+                                self.flow.on_trade(d)
+                    finally:
+                        if syncer:
+                            syncer.cancel()
             except Exception as e:  # koneksi putus -> sambung ulang
-                log(f"Feed token baru terputus ({e!r}), sambung ulang dalam {backoff} dtk")
+                err = repr(e).replace(self.s.pumpportal_api_key, "***") if self.s.pumpportal_api_key else repr(e)
+                log(f"Feed token baru terputus ({err}), sambung ulang dalam {backoff} dtk")
                 await asyncio.sleep(backoff)
                 backoff = min(backoff * 2, 60)
+
+    async def flow_subscriber(self, ws):
+        """Langganan transaksi token baru secepatnya (dikumpulkan tiap 0,3 dtk) di koneksi yang sama dengan feed
+        token baru, dan berhenti berlangganan token yang sudah 20 menit diikuti."""
+        while True:
+            await asyncio.sleep(0.3)
+            sub, unsub = self.flow.take_changes()
+            if sub:
+                await ws.send(json.dumps({"method": "subscribeTokenTrade", "keys": sub}))
+            if unsub:
+                await ws.send(json.dumps({"method": "unsubscribeTokenTrade", "keys": unsub}))
 
     def on_new_token(self, d):
         self.new_tokens_seen += 1
@@ -380,6 +414,7 @@ class Simulator:
                       price=launch, last_change=now, creator=d.get("traderPublicKey") or "",
                       dev_initial=float(d.get("initialBuy") or 0))
         self.features.add(token, ctx=ctx)  # data belajar AI
+        self.flow.start(token, token.creator, float(d.get("initialBuy") or 0), float(d.get("vSolInBondingCurve") or 0), ctx=ctx)
         if self.trading_paused:   # /stop dari Telegram: tidak membuka posisi baru
             return
         for st in self.strategies.values():
@@ -538,6 +573,7 @@ class Simulator:
                     await self.poll_curves([t for t in self.features.tokens()
                                             if t.mint not in tracked and t.mint not in young_ids])
                 self.features.observe(time.time())
+                self.flow.tick(time.time(), lambda snap, it: safety_assess(snap, it["ctx"], it["missed"]))
                 if time.time() - last_dev >= self.s.antirug_dev_check_sec:
                     last_dev = time.time()
                     await self.antirug_exit_check()
@@ -747,37 +783,21 @@ class Simulator:
             self.close_position(pos, reason)
 
     def evaluate_exits(self):
+        """Aturan jual dari mesin bersama (meme_engine.py): persis sama dengan yang dipakai backtest."""
         now = time.time()
         for st in self.strategies.values():
-            s = st.cfg  # aturan jual milik varian ini
+            c = st.cfg  # aturan jual milik varian ini
             for pos in st.positions:
                 if pos.closed:
                     continue
-                pos.peak = max(pos.peak, pos.token.price)
-                m = pos.mult()
-                age_min = (now - pos.opened) / 60
-                if not pos.tp1:
-                    if m <= 1 - s.stop_loss:
-                        self.sell(pos, pos.remaining, "stop loss")
-                    elif m >= s.tp1_mult:
-                        pos.tp1, pos.tp1_time = True, now
-                        self.sell(pos, pos.tokens * s.tp1_sell, f"TP1 {s.tp1_mult:g}x")
-                    elif age_min >= s.max_hold_min:
-                        self.sell(pos, pos.remaining, "batas waktu")
-                if pos.closed:
-                    continue
-                if pos.tp1:
-                    if not pos.tp2 and m >= s.tp2_mult:
-                        pos.tp2 = True
-                        self.sell(pos, pos.tokens * s.tp2_sell, f"TP2 {s.tp2_mult:g}x")
+                es = ExitState(pos.tokens, pos.remaining, pos.entry_price, pos.peak, pos.opened, pos.token.last_change,
+                               pos.tp1, pos.tp2, pos.tp1_time)
+                orders = exit_orders(c, es, pos.token.price, now)
+                pos.peak, pos.tp1, pos.tp2, pos.tp1_time = es.peak, es.tp1, es.tp2, es.tp1_time
+                for qty, reason in orders:
                     if pos.closed:
-                        continue
-                    if pos.token.price <= pos.peak * (1 - s.trailing_stop):
-                        self.sell(pos, pos.remaining, "trailing stop")
-                    elif age_min >= s.max_hold_after_tp_min:
-                        self.sell(pos, pos.remaining, "batas waktu")
-                if not pos.closed and now - pos.token.last_change >= s.stale_min * 60:
-                    self.sell(pos, pos.remaining, "koin mati (harga diam)")
+                        break
+                    self.sell(pos, qty, reason)
 
     def close_position(self, pos, reason):
         pos.closed = True
@@ -891,6 +911,7 @@ class Simulator:
                 ("spam_skipped", self.spam_skipped), ("sol_usd", self.sol_usd),
                 ("coins_per_batch", self.s.coins_per_batch), ("batch_budget_usd", self.s.batch_budget_usd),
                 ("features_tracking", len(self.features.items)), ("trading_paused", int(self.trading_paused)),
+                ("flow_tracking", len(self.flow.items)), ("flow_trades", self.flow.trades_seen), ("flow_on", 1 if self.flow_on else 2),
                 ("antirug_blocked", sum(st.antirug_blocked for st in self.strategies.values())),
                 ("ws_live", self.ws_live)]
         for st in self.strategies.values():
@@ -1028,6 +1049,10 @@ class Simulator:
             self.notify("⏸ Catatan: trading masih DIJEDA (dari /stop sebelumnya). Ketik /mulai untuk melanjutkan.")
         tasks = [self.listen_new_tokens(), self.poll_loop(), self.sol_price_loop(), self.summary_loop(),
                  self.backup_loop(), self.ws_prices(), self.features.meta_worker(self.http)]
+        if not self.flow_on:   # mode sampel aliran transaksi: RPC publik Solana, 2 permintaan bersamaan (sopan)
+            pub = PublicRpc(PUBLIC_RPC)
+            pub.sem = asyncio.Semaphore(2)
+            tasks.append(self.flow.sample_worker(pub))
         if tg:
             tasks += [self.telegram_sender(), self.telegram_commands()]
         await asyncio.gather(*tasks)
@@ -1036,6 +1061,7 @@ class Simulator:
         """Posisi terbuka TIDAK ditutup: akan dilanjutkan saat simulator dijalankan lagi."""
         open_pos = [p for st in self.strategies.values() for p in st.positions if not p.closed]
         self.features.flush()
+        self.flow.flush()
         log(f"Simulator berhenti. {len(open_pos)} posisi terbuka akan dilanjutkan saat simulator dijalankan lagi.")
         print("\n" + build_report(self.db))
         if self.s.telegram_bot_token and self.s.telegram_chat_id:

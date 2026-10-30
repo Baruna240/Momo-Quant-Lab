@@ -30,6 +30,9 @@ The project is documented in Bahasa Indonesia in [docs/PANDUAN.md](docs/PANDUAN.
 | **Altcoin and futures simulator** (`altcoin.py`) | Covers the top 30 coins by market cap plus a watchlist. It runs **spot** strategies (EMA trend, breakout, RSI dip, 4h swing) and **perpetual futures** with leverage, long and short, isolated-margin **liquidation** and real **funding rates** (OKX). A daily backtest is shared with the live engine, and HODL BTC is the benchmark. |
 | **Futures AI** (`alt_ai.py`) | Gradient boosting on 18 candle and market-regime features predicts 12-hour direction (up, flat or down, scaled by ATR). It is retrained daily. **Safety gate:** it may only trade a direction that was proven out-of-sample (≥200 signals, >50% hit rate, mean > costs). |
 | **Metrics, risk & cost calibration** (`metrics.py`, `risk.py`, `calibrate.py`) | One shared metrics module (profit factor, expectancy, t-stat, max drawdown, per-trade Sharpe/Sortino, fees, slippage, out-of-sample PF, walk-forward stability and an honest verdict). A deterministic risk layer (daily loss, drawdown, exposure, slippage limits, kill switch, duplicate-order guard) that no strategy or AI can override; it runs in *shadow* mode for research and *enforce* mode for validated strategies. `calibrate.py` measures real slippage from on-chain prices 1–5 s after each simulated decision. |
+| **Shared exit engine** (`meme_engine.py`, `costs.py`) | One pure function holds every meme exit rule (stop loss, TP ladder, trailing, time limits, dead-coin exit) and one cost model holds the calibrated slippage. The live simulator and every backtest call the same code, so they cannot drift apart. |
+| **Trade-flow recorder & Safety agent** (`flow.py`, `safety.py`) | Follows each new token for 20 minutes: every buy and sell with its wallet in the first 5 minutes, snapshots of unique buyers, snipers, same-size (bot) buys, wash trading, dev selling, serial snipers and SOL bought in the launch block, then a consistent outcome label (rug / dump / flat / normal / graduated). Streams from PumpPortal when an API key is set; otherwise samples 1 in 5 tokens by replaying their first minute from the public Solana RPC. The Safety agent scores every token in 4 layers (creator, launch, flow, holders) and is graded against those labels before it may filter anything. |
+| **Altcoin history & technical analysis** (`alt_data.py`, `indicators.py`) | Downloads 1 h / 4 h / 1 d candles since 2022 through CCXT (Binance public data host, OKX fallback) with incremental updates. A NumPy indicator library (EMA 50/200, RSI, MACD, ADX, ATR, VWAP, relative volume, support/resistance, breakout + retest, BTC correlation, volatility) feeds a regime classifier and a multi-timeframe scanner. |
 | **Dashboard** (`dashboard.py`, `web/`) | A real-time web UI in **two themes** (see below): live equity curves, per-coin candlestick charts with trade markers, an animated execution pipeline, the strategy leaderboard, Monte Carlo risk, and the AI training report. |
 | **Telegram bot** | Sends trade alerts, round summaries, and the `/status`, `/laporan`, `/stop`, `/mulai` and `/alt` commands. |
 
@@ -106,6 +109,9 @@ python wallet_lab.py discover      # find wallets that keep buying first (needs 
 python wallet_lab.py profile       # dissect their trades; then: python wallet_lab.py report
 python wallet_lab.py backtest      # replay the snipers' coin filters + scalping exits on recorded prices
 python calibrate.py --n 150       # measure real slippage on-chain (needs Helius)
+python alt_data.py                # download / update altcoin candles since 2022
+python indicators.py SOL          # multi-timeframe technical analysis of one coin
+python flow.py                    # trade-flow labels and Safety score report
 python -m unittest discover tests
 ```
 `mulai_semua.bat` starts everything in minimized windows, and `pasang_autostart.bat` starts it at Windows login.
