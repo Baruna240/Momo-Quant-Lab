@@ -423,6 +423,9 @@ def scan_loop():
         time.sleep(300)
 
 
+SIDE_NAME = {1: "long", -1: "short"}   # alt_ai menyimpan sisi yang terbukti sebagai angka
+
+
 def quant_summary(conn):
     from metrics import alt_trades, leaderboard, meme_trades
     from risk import KILL_FILE, RiskLimits
@@ -558,7 +561,7 @@ def quant_summary(conn):
         {"id": "risk", "name": "Risk & Portfolio", "kind": "veto", "ok": not out["kill"],
          "metric": ("KILL SWITCH AKTIF" if out["kill"] else f"mode {SETTINGS.risk_mode} · {out['risk'].get('blocked24', 0)} blokir / 24j")},
         {"id": "research", "name": "Strategy Research", "kind": "kode + LLM", "ok": True,
-         "metric": f"{len(cand)} kandidat lolos · AI futures {'menunggu bukti' if not ai.get('sides') else ', '.join(ai['sides'])}"},
+         "metric": f"{len(cand)} kandidat lolos · AI futures {'menunggu bukti' if not ai.get('sides') else 'boleh ' + '/'.join(SIDE_NAME.get(x, str(x)) for x in ai['sides'])}"},
     ]
     # status agent dari siklus Supervisor yang sebenarnya (agents.db); dipakai bila siklus terakhir < 30 menit
     try:
@@ -631,6 +634,8 @@ class Handler(BaseHTTPRequestHandler):
             self.send({"error": "not found"}, code=404)
         except sqlite3.OperationalError as e:
             self.send({"error": f"database sibuk: {e}"}, code=503)
+        except Exception as e:      # error lain dikirim sebagai pesan, bukan memutus koneksi (halaman tidak kosong diam-diam)
+            self.send({"error": f"{type(e).__name__}: {e}"}, code=500)
 
 
 def main():
