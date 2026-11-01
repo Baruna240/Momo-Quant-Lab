@@ -18,6 +18,11 @@ from meme_engine import ExitState, exit_orders  # noqa: E402
 import safety  # noqa: E402
 import indicators as ind  # noqa: E402
 import research  # noqa: E402
+import sqlite3  # noqa: E402
+from agents.base import Agent  # noqa: E402
+from agents.guards import RiskAgent, SafetyAgent  # noqa: E402
+from agents.scanners import MemeScannerAgent  # noqa: E402
+from agents.supervisor import Supervisor, latest_cycle  # noqa: E402
 import altcoin  # noqa: E402
 import numpy as np  # noqa: E402
 import tempfile  # noqa: E402
@@ -415,6 +420,73 @@ class ResearchTest(unittest.TestCase):
         trades = [{"t_in": 0, "t_out": 10, "ret": 0.1} for _ in range(research.SLOTS + 3)]
         r = research.portfolio(trades, 0, 365 * 86400)
         self.assertAlmostEqual(r["total"], 0.1)                  # hanya SLOTS posisi diambil, masing-masing 1/SLOTS modal
+
+
+class AgentTest(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.dir = Path(self.tmp.name)
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def sim_db(self):
+        db = sqlite3.connect(self.dir / "simulasi.db")
+        db.executescript("""CREATE TABLE stats(key TEXT PRIMARY KEY, value REAL);
+            CREATE TABLE token_features(mint TEXT, symbol TEXT, created REAL, m60 REAL, s60 REAL, max_mult REAL, dev_sol REAL,
+                dev_pct REAL, creator_n24 REAL, name_n1h REAL, tw REAL);
+            CREATE TABLE positions(strategy TEXT, closed REAL, cost_usd REAL, pnl_usd REAL);""")
+        import time as _t
+        now = _t.time()
+        db.execute("INSERT INTO stats VALUES ('heartbeat', ?), ('tokens_seen', 12)", (now,))
+        db.executemany("INSERT INTO token_features VALUES (?,?,?,?,?,?,?,?,?,?,?)", [
+            ("A", "AAA", now - 120, 2.0, 9, 3.0, 1.0, 5, 0, 0, 1), ("B", "BBB", now - 60, 1.2, 4, 1.3, 0.1, 25, 6, 3, 0)])
+        db.executemany("INSERT INTO positions VALUES (?,?,?,?)", [("s", now - 500 + i, 1.0, -1.0) for i in range(12)])
+        db.commit()
+        db.close()
+
+    def test_failing_agent_is_contained(self):
+        class Broken(Agent):
+            name = "broken"
+            def act(self, state):
+                raise ValueError("data rusak")
+        r = Broken(self.dir).run({})
+        self.assertFalse(r.ok)
+        self.assertIn("ValueError: data rusak", r.errors[0])
+
+    def test_scanner_and_safety_structured_output(self):
+        self.sim_db()
+        m = MemeScannerAgent(self.dir).run({})
+        self.assertTrue(m.ok, m.errors)
+        self.assertEqual([c["symbol"] for c in m.data["candidates"]], ["AAA", "BBB"])
+        s = SafetyAgent(self.dir).run({"meme_scanner": m.to_dict()})
+        self.assertTrue(s.ok)
+        scores = {x["symbol"]: x["score"] for x in s.data["scored"]}
+        self.assertGreater(scores["BBB"], scores["AAA"])          # dev serial + porsi dev besar + nama tiruan
+        self.assertTrue(any("belum boleh dipakai" in w for w in s.warnings))
+
+    def test_risk_agent_vetoes_after_daily_loss(self):
+        self.sim_db()
+        r = RiskAgent(self.dir).run({"proposals": [{"strategy": "s", "key": "X", "cost": 1.0}]})
+        self.assertTrue(r.ok, r.errors)
+        self.assertIn("s", r.data["breaches"])                  # rugi 12 hari ini > batas harian 5
+        self.assertTrue(r.data["decisions"][0]["shadow"] or not r.data["decisions"][0]["allowed"])
+
+    def test_supervisor_records_cycle_even_when_an_agent_fails(self):
+        self.sim_db()
+        sup = Supervisor(self.dir, agents=[MemeScannerAgent(self.dir), SafetyAgent(self.dir), RiskAgent(self.dir)],
+                         db_path=self.dir / "agents.db")
+        state, summary = sup.cycle()
+        self.assertEqual(summary["data"]["agents_ok"], 3)
+        runs, ts = latest_cycle(self.dir / "agents.db")
+        self.assertEqual(set(runs), {"meme_scanner", "safety", "risk", "supervisor"})
+        (self.dir / "simulasi.db").unlink()                     # data hilang: agent gagal, siklus tetap tercatat
+        state, summary = sup.cycle()
+        self.assertFalse(summary["ok"])
+        self.assertTrue(summary["errors"])
+
+    def test_more_trials_raise_the_bar(self):
+        self.assertGreater(research.t_needed(100), research.t_needed(28))
 
 
 if __name__ == "__main__":

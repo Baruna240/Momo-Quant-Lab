@@ -560,6 +560,22 @@ def quant_summary(conn):
         {"id": "research", "name": "Strategy Research", "kind": "kode + LLM", "ok": True,
          "metric": f"{len(cand)} kandidat lolos · AI futures {'menunggu bukti' if not ai.get('sides') else ', '.join(ai['sides'])}"},
     ]
+    # status agent dari siklus Supervisor yang sebenarnya (agents.db); dipakai bila siklus terakhir < 30 menit
+    try:
+        from agents.supervisor import latest_cycle
+        runs, cyc = latest_cycle()
+    except Exception:
+        runs, cyc = {}, None
+    if cyc and now - cyc < 1800:
+        names = {"meme": "meme_scanner", "alt": "altcoin_scanner", "safety": "safety", "smart": "smart_money",
+                 "regime": "market_regime", "risk": "risk", "research": "research", "supervisor": "supervisor"}
+        for ag in out["agents"]:
+            r = runs.get(names.get(ag["id"], ""))
+            if r:
+                ag["ok"] = r["ok"] and ag["ok"] if ag["id"] in ("meme", "alt") else r["ok"]
+                ag["metric"] = r["summary"]
+                ag["warnings"], ag["errors"], ag["took_ms"] = r["warnings"], r["errors"], r["took_ms"]
+    out["cycle_at"] = cyc
     out["regime"], out["ai"] = regime, {k: ai.get(k) for k in ("acc", "base_acc", "long_n", "long_hit", "long_ret",
                                                                 "short_n", "short_hit", "short_ret", "sides", "trained_at")}
     out["meme_best"] = meme_best and meme_best["strategy"]

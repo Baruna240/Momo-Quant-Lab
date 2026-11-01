@@ -48,6 +48,7 @@ def connect(path=FLOW_DB):
         dev_tokens REAL, launch_price REAL, missed_sol REAL, first_age REAL, n_trades INTEGER, n_traders INTEGER,
         snaps TEXT, peak_mult REAL, t_peak REAL, trough_after_peak REAL, final_mult REAL, dev_sold_frac REAL,
         dev_first_sell_age REAL, graduated INTEGER, label TEXT, safety60 REAL, safety60_reasons TEXT, finalized REAL);
+    CREATE TABLE IF NOT EXISTS sample_log (ts REAL, mint TEXT, kind TEXT, ok INTEGER, secs REAL, calls INTEGER, err TEXT);
     """)
     db.commit()
     return db
@@ -234,6 +235,7 @@ class FlowTracker:
             it = self.items.get(mint)
             if not it:
                 continue
+            t0, calls0, err, ok = time.time(), getattr(rpc, "calls", 0), None, 0
             try:
                 if kind == "early":
                     await self._backfill(rpc, mint, it)
@@ -242,13 +244,18 @@ class FlowTracker:
                     bal = sum(float(a["account"]["data"]["parsed"]["info"]["tokenAmount"]["uiAmount"] or 0) for a in res["value"])
                     it["dev_sold"] = max(it["dev_sold"], it["dev_tokens"] - bal)
                 self.sample_ok += 1
-            except Exception:
+                ok = 1
+            except Exception as e:
                 self.sample_fail += 1     # gagal = pakai yang sudah terlihat di transaksi awal, tidak menghambat yang lain
+                err = f"{type(e).__name__}: {e}"[:200]
             finally:
                 if kind == "early":
                     it["raw_ready"] = True
                 else:
                     it["dev_done"] = True
+                self.db.execute("INSERT INTO sample_log VALUES (?,?,?,?,?,?,?)", (time.time(), mint, kind, ok, round(time.time() - t0, 1),
+                                getattr(rpc, "calls", 0) - calls0, err))
+                self.db.commit()
 
     async def _backfill(self, rpc, mint, it):
         sigs, before = [], None
@@ -324,6 +331,10 @@ class Paced:
     """Bungkus RPC dengan jeda tetap antar panggilan (dipakai bersama oleh semua jalur kerja mode sampel)."""
     def __init__(self, rpc, interval=PUBLIC_RPC_INTERVAL):
         self.rpc, self.interval, self.last, self.lock = rpc, interval, 0.0, asyncio.Lock()
+
+    @property
+    def calls(self):
+        return getattr(self.rpc, "calls", 0)
 
     async def __call__(self, method, params):
         async with self.lock:

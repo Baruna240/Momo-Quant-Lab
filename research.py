@@ -289,8 +289,10 @@ def coin_ctx(env, b, tf, cost_mult=1.0, delay=0):
     return d, ctx
 
 
-def run_hypothesis(env, key, ctx_cache):
-    H = HYPOTHESES[key]
+def run_hypothesis(env, key, ctx_cache, grid=None, trials=None):
+    """grid: kombinasi parameter yang diuji (bawaan: kisi hipotesis); trials: total percobaan untuk syarat signifikansi
+    (bawaan: semua kisi bawaan; Challenger memakai buku catatan percobaan sepanjang masa)."""
+    H = {**HYPOTHESES[key], "grid": grid or HYPOTHESES[key]["grid"]}
     tf, fn = H["tf"], H["fn"]
     bases = [b for b in env["bases"] if b in env["data"][tf]]
     t_start = min(env["data"][tf][b]["t"][0] for b in bases)
@@ -349,8 +351,8 @@ def run_hypothesis(env, key, ctx_cache):
         mc_dd.append(worst)
     mc95 = float(np.percentile(mc_dd, 5)) if mc_dd else None
     # 4) signifikansi: syarat t-stat naik sesuai jumlah percobaan (koreksi Bonferroni, satu sisi, alfa 5%)
-    trials = sum(len(h["grid"]) for h in HYPOTHESES.values())
-    t_need = NormalDist().inv_cdf(1 - 0.05 / trials)
+    trials = trials or sum(len(h["grid"]) for h in HYPOTHESES.values())
+    t_need = t_needed(trials)
     btc_oos = hodl(env["data"][tf], IS_END, t_end, ["BTC"])
     stages = [
         ("Backtest penuh untung", full.get("pf") is not None and full["pf"] > 1 and full["n"] >= MIN_IS_TRADES),
@@ -403,6 +405,79 @@ def meme_status():
     out.append({"key": "H4", "name": "Anti-rug + liquidity protection", "status": "menunggu data aliran",
                 "detail": f"{scored} token punya skor Safety + label; dinilai setelah ≥ 300"})
     return out
+
+
+def t_needed(trials):
+    """Syarat t-stat satu sisi (alfa 5%) yang dinaikkan sesuai jumlah percobaan (koreksi Bonferroni)."""
+    return NormalDist().inv_cdf(1 - 0.05 / max(1, trials))
+
+
+# ---------------------------------------------------------------- Champion vs Challenger (dipakai agent Strategy Research)
+# Ruang parameter yang lebih luas dari kisi bawaan. Challenger dipilih HANYA dari hasil in-sample (2022-2024),
+# lalu diuji di semua tahap. Setiap konfigurasi yang pernah diuji dicatat di buku percobaan, dan syarat signifikansi
+# dihitung dari TOTAL percobaan sepanjang masa: makin sering mencoba, makin sulit lolos (anti "memancing" hasil).
+SPACE = {
+    "H5": grid(N=[20, 30, 50, 100], k=[1.0, 1.5, 2.0], m=[2, 3, 4]),
+    "H6": grid(ma=[(20, 50), (30, 100), (50, 200)], adx=[0, 20, 25], m=[2, 3, 4]),
+    "H7": grid(r=[1.5, 2.0, 2.5, 3.0], ema=[False, True], H=[6, 12, 24]),
+    "H8": grid(ma=[(10, 30), (20, 50), (30, 100), (50, 200)], rsi=[20, 25, 30, 35]),
+}
+
+
+def ledger(db=None):
+    own = db is None
+    db = db or sqlite3.connect(RESEARCH_DB)
+    db.execute("""CREATE TABLE IF NOT EXISTS trials (ts REAL, key TEXT, params TEXT, is_exp REAL, oos_exp REAL, passed INTEGER,
+                  stages INTEGER, PRIMARY KEY (key, params))""")
+    db.commit()
+    if own:
+        return db
+    return db
+
+
+def total_trials(db):
+    """Kisi bawaan (selalu dihitung) + semua konfigurasi tambahan yang pernah diuji Challenger."""
+    base = {(k, json.dumps(p, sort_keys=True)) for k, h in HYPOTHESES.items() for p in h["grid"]}
+    extra = {(r[0], r[1]) for r in db.execute("SELECT key, params FROM trials")} - base
+    return len(base) + len(extra)
+
+
+def challenge(env, key, champion, n=3, ctx_cache=None):
+    """Uji n challenger untuk hipotesis `key`. Hasil: {champion, challengers: [...], promoted}."""
+    db = ledger()
+    tested = {r[0] for r in db.execute("SELECT params FROM trials WHERE key=?", (key,))}
+    tested |= {json.dumps(p, sort_keys=True) for p in HYPOTHESES[key]["grid"]}
+    fresh = [p for p in SPACE[key] if json.dumps(p, sort_keys=True) not in tested]
+    if not fresh:
+        db.close()
+        return {"champion": champion, "challengers": [], "promoted": False, "note": "ruang parameter sudah habis diuji"}
+    cache = ctx_cache if ctx_cache is not None else {}
+    # pilih kandidat dari IN-SAMPLE saja (data 2025+ tidak dipakai memilih)
+    scout = []
+    for p in fresh:
+        r = run_hypothesis(env, key, cache, grid=[p], trials=1)
+        if r["is"].get("n", 0) >= MIN_IS_TRADES:
+            scout.append((r["is"]["exp"], p))
+    picks = [p for _, p in sorted(scout, key=lambda x: -x[0])[:n]]
+    for p in picks:      # catat dulu: percobaan dihitung walaupun hasilnya jelek
+        db.execute("INSERT OR IGNORE INTO trials VALUES (?,?,?,?,?,?,?)", (time.time(), key, json.dumps(p, sort_keys=True),
+                   None, None, None, None))
+    db.commit()
+    trials = total_trials(db)
+    results = []
+    for p in picks:
+        r = run_hypothesis(env, key, cache, grid=[p], trials=trials)
+        db.execute("UPDATE trials SET is_exp=?, oos_exp=?, passed=?, stages=? WHERE key=? AND params=?",
+                   (r["is"].get("exp"), r["oos"].get("exp"), int(r["passed"] == len(r["stages"])), r["passed"], key,
+                    json.dumps(p, sort_keys=True)))
+        results.append({"params": p, "passed": r["passed"], "stages": len(r["stages"]), "verdict": r["verdict"],
+                        "is_exp": r["is"].get("exp"), "oos_exp": r["oos"].get("exp"), "oos_pf": r["oos"].get("pf"), "t": r["oos"].get("t")})
+    db.commit()
+    db.close()
+    best = max(results, key=lambda x: (x["passed"], x["is_exp"] or -1), default=None)
+    promoted = bool(best and best["passed"] == best["stages"] and best["passed"] > champion.get("passed", 0))
+    return {"champion": best if promoted else champion, "challengers": results, "promoted": promoted,
+            "trials_total": trials, "t_need": t_needed(trials)}
 
 
 def save(results):

@@ -3,3 +3,4 @@ websockets>=16.0
 numpy>=2.0
 scikit-learn>=1.5
 ccxt>=4.4
+langgraph>=0.2
