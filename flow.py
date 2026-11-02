@@ -49,6 +49,7 @@ def connect(path=FLOW_DB):
         snaps TEXT, peak_mult REAL, t_peak REAL, trough_after_peak REAL, final_mult REAL, dev_sold_frac REAL,
         dev_first_sell_age REAL, graduated INTEGER, label TEXT, safety60 REAL, safety60_reasons TEXT, finalized REAL);
     CREATE TABLE IF NOT EXISTS sample_log (ts REAL, mint TEXT, kind TEXT, ok INTEGER, secs REAL, calls INTEGER, err TEXT);
+    CREATE TABLE IF NOT EXISTS ws_messages (ts REAL, message TEXT, count INTEGER, PRIMARY KEY (message));
     """)
     db.commit()
     return db
@@ -307,6 +308,13 @@ class FlowTracker:
         self.db.commit()
         del self.items[mint]
         self.to_unsub.append(mint)
+
+    def note_message(self, text, now=None):
+        """Balasan PumpPortal (konfirmasi / penolakan langganan) dicatat supaya masalah key atau saldo langsung terlihat."""
+        text = str(text)[:300]
+        self.db.execute("""INSERT INTO ws_messages VALUES (?,?,1) ON CONFLICT(message)
+                           DO UPDATE SET ts = excluded.ts, count = count + 1""", (now or self.clock(), text))
+        self.db.commit()
 
     def take_changes(self):
         sub, unsub = self.to_sub, self.to_unsub

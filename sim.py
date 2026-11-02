@@ -376,6 +376,10 @@ class Simulator:
                                 self.on_new_token(d)
                             elif tx in ("buy", "sell"):
                                 self.flow.on_trade(d)
+                            elif d.get("message"):   # balasan PumpPortal: dicatat di flow.db (ws_messages)
+                                self.flow.note_message(d["message"])
+                                if self.flow_on and "funded with at least" in str(d["message"]):
+                                    self.fallback_to_sampling()
                     finally:
                         if syncer:
                             syncer.cancel()
@@ -385,12 +389,31 @@ class Simulator:
                 await asyncio.sleep(backoff)
                 backoff = min(backoff * 2, 60)
 
+    def start_sampling(self):
+        """Mode sampel aliran transaksi: RPC publik Solana dengan jeda tetap antar panggilan (sekali saja)."""
+        if getattr(self, "_sampler", None) is None:
+            pub = PublicRpc(PUBLIC_RPC)
+            pub.sem = asyncio.Semaphore(1)
+            self._sampler = asyncio.create_task(self.flow.sample_worker(Paced(pub)))
+
+    def fallback_to_sampling(self):
+        """PumpPortal menolak (saldo dompet API key < 0,02 SOL): kembali ke mode sampel tanpa restart.
+        Token yang sudah diikuti dalam mode stream dibuang (belum punya data, jangan sampai terlabel 'datar')."""
+        self.flow_on = False
+        self.flow.sample_every = FLOW_SAMPLE_EVERY
+        self.flow.items.clear()
+        self.flow.take_changes()
+        self.start_sampling()
+        log("PumpPortal menolak aliran transaksi (saldo API key < 0,02 SOL) -> kembali ke mode sampel RPC publik")
+
     async def flow_subscriber(self, ws):
         """Langganan transaksi token baru secepatnya (dikumpulkan tiap 0,3 dtk) di koneksi yang sama dengan feed
         token baru, dan berhenti berlangganan token yang sudah 20 menit diikuti."""
         while True:
             await asyncio.sleep(0.3)
             sub, unsub = self.flow.take_changes()
+            if not self.flow_on:      # mode sampel: tidak berlangganan apa pun ke PumpPortal
+                continue
             if sub:
                 await ws.send(json.dumps({"method": "subscribeTokenTrade", "keys": sub}))
             if unsub:
@@ -1050,10 +1073,8 @@ class Simulator:
             self.notify("⏸ Catatan: trading masih DIJEDA (dari /stop sebelumnya). Ketik /mulai untuk melanjutkan.")
         tasks = [self.listen_new_tokens(), self.poll_loop(), self.sol_price_loop(), self.summary_loop(),
                  self.backup_loop(), self.ws_prices(), self.features.meta_worker(self.http)]
-        if not self.flow_on:   # mode sampel aliran transaksi: RPC publik Solana dengan jeda tetap antar panggilan
-            pub = PublicRpc(PUBLIC_RPC)
-            pub.sem = asyncio.Semaphore(1)
-            tasks.append(self.flow.sample_worker(Paced(pub)))
+        if not self.flow_on:
+            self.start_sampling()
         if tg:
             tasks += [self.telegram_sender(), self.telegram_commands()]
         await asyncio.gather(*tasks)
