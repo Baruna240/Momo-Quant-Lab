@@ -1,6 +1,7 @@
 """Unit tests for the core math. Run: python -m unittest discover tests"""
 import sys
 import unittest
+from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -93,7 +94,9 @@ class KellyTest(unittest.TestCase):
 
 class MemeExitSimTest(unittest.TestCase):
     def setUp(self):
-        self.s = load_settings()
+        # "filter" sudah dipensiunkan (tidak dibangun secara default), tapi tes ini menguji matematika exit-nya,
+        # jadi diminta eksplisit lewat STRATEGIES (varian yang diminta eksplisit tetap dibangun)
+        self.s = replace(load_settings(), strategies="filter")
         self.c = next(v for v in build_variants(self.s) if v.name == "filter")
 
     def test_flat_coin_loses_only_costs(self):
