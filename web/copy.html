@@ -1,0 +1,216 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Copy Trade Lab</title>
+<style>
+:root {
+  color-scheme: dark;
+  --bg: #07090c; --panel: #0e1217; --panel-2: #121821; --line: #1d2530; --line-2: #2a3442;
+  --text: #dfe5ec; --text-2: #9aa6b4; --muted: #5f6b7a;
+  --amber: #f5c542; --cyan: #22d3ee; --green: #22c55e; --red: #ef4444; --orange: #f97316; --violet: #9d7bff;
+  --mono: ui-monospace, "Cascadia Mono", "JetBrains Mono", Consolas, "Courier New", monospace;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--bg); color: var(--text); }
+body { font: 12px/1.45 var(--mono); }
+a { color: var(--cyan); text-decoration: none; }
+a:hover { text-decoration: underline; }
+.wrap { width: 100%; margin: 0 auto; padding: 10px 12px 32px; }
+.top { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; padding: 8px 12px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 6px; }
+.logo { width: 26px; height: 26px; border-radius: 5px; background: var(--violet); color: #0b0b0b; display: grid;
+  place-items: center; font-weight: 800; font-size: 15px; }
+.brand b { font-size: 14px; letter-spacing: .08em; }
+.brand div { color: var(--muted); font-size: 10px; letter-spacing: .12em; }
+.sim-badge { color: #0b0b0b; background: var(--orange); padding: 1px 6px; border-radius: 3px; font-weight: 700; font-size: 10px; letter-spacing: .1em; }
+.chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 9px; border: 1px solid var(--line-2);
+  border-radius: 4px; color: var(--text-2); white-space: nowrap; }
+.grow { flex: 1; }
+.rules { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0; }
+.rules .chip b { color: var(--text); }
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px; margin-bottom: 10px; }
+.kpi { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 10px 12px; }
+.kpi .k { color: var(--muted); font-size: 10px; letter-spacing: .12em; text-transform: uppercase; }
+.kpi .v { font-size: 22px; font-weight: 700; margin-top: 4px; }
+.kpi .s { color: var(--text-2); font-size: 11px; margin-top: 2px; }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; margin-bottom: 10px; }
+.panel h2 { margin: 0; padding: 9px 12px; font-size: 11px; letter-spacing: .14em; text-transform: uppercase;
+  color: var(--text-2); border-bottom: 1px solid var(--line); display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
+.panel h2 span { color: var(--muted); letter-spacing: 0; text-transform: none; font-size: 11px; }
+.scroll { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; }
+th, td { padding: 6px 10px; text-align: right; white-space: nowrap; border-bottom: 1px solid var(--line); }
+th { color: var(--muted); font-weight: 600; font-size: 10px; letter-spacing: .08em; text-transform: uppercase; }
+th:first-child, td:first-child, th.l, td.l { text-align: left; }
+tbody tr:hover { background: var(--panel-2); }
+.addr { display: inline-flex; gap: 6px; align-items: center; }
+.addr code { color: var(--text); }
+.copy { font: inherit; font-size: 10px; padding: 1px 6px; border-radius: 3px; cursor: pointer;
+  background: var(--panel-2); color: var(--text-2); border: 1px solid var(--line-2); }
+.copy:hover { color: var(--text); border-color: var(--cyan); }
+.pos { color: var(--green); } .neg { color: var(--red); } .dim { color: var(--muted); }
+.tag { font-size: 10px; padding: 1px 6px; border-radius: 3px; border: 1px solid var(--line-2); color: var(--text-2); }
+.tag.ok { border-color: var(--green); color: var(--green); }
+.tag.no { border-color: var(--red); color: var(--red); }
+.tag.wait { border-color: var(--amber); color: var(--amber); }
+.note { color: var(--text-2); padding: 10px 12px; line-height: 1.6; }
+.note b { color: var(--text); }
+.empty { color: var(--muted); padding: 16px 12px; }
+.err { color: var(--red); padding: 10px 12px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top">
+    <div class="logo">C</div>
+    <div class="brand"><b>COPY TRADE LAB</b><div>DOMPET LEADER · FORWARD TEST · PUMP.FUN</div></div>
+    <span class="sim-badge">SIMULASI</span>
+    <a class="chip" href="/">← DASHBOARD MEME</a>
+    <a class="chip" href="/prism">PRISM</a>
+    <div class="grow"></div>
+    <span class="chip">UPDATE <b id="upd">–</b></span>
+  </div>
+
+  <div class="rules" id="rules"></div>
+  <div class="kpis" id="kpis"></div>
+
+  <div class="panel">
+    <h2>Dompet yang di-copy <span>leader terkunci: hanya transaksi SESUDAH tanggal dipilih yang dinilai</span></h2>
+    <div class="scroll"><table id="leaders"></table></div>
+  </div>
+
+  <div class="panel">
+    <h2>Hasil forward test per gaya pegang <span>kelipatan modal per koin sesudah semua biaya · 1,000x = impas · telat dalam slot (1 slot ≈ 0,4 dtk)</span></h2>
+    <div class="scroll"><table id="groups"></table></div>
+  </div>
+
+  <div class="panel">
+    <h2>Leaderboard 1–10 <span id="board-src">dompet yang sudah kita bedah, diurutkan menurut untung (SOL)</span></h2>
+    <div class="scroll"><table id="board"></table></div>
+  </div>
+
+  <div class="panel">
+    <h2>Ditolak filter <span>20 dompet teratas menurut untung yang TIDAK lolos, beserta alasannya</span></h2>
+    <div class="scroll"><table id="rejected"></table></div>
+  </div>
+
+  <div class="panel">
+    <div class="note">
+      <b>Cara membaca:</b> "Dompet yang di-copy" lolos filter perilaku (win rate wajar, bukan bot frekuensi tinggi, modal wajar,
+      memegang beberapa menit, disiplin cut loss), lalu peringkat 1–10 menurut untung, lalu umur dompet minimal
+      <span id="age-rule">30</span> hari. Bot sniper sengaja ditolak: mereka masuk di blok yang sama dengan pembuatan token dan
+      menjual dalam detik, jadi penyalin selalu membeli lebih mahal dan menjadi tempat mereka menjual.
+      Dompet baru sering dipakai untuk pump &amp; dump atau untuk memancing copy-trader.
+      Filter ini mengurangi risiko, tapi <b>tidak menjamin aman</b>: dompet lama yang untung tetap bisa menjual ke para penyalinnya.
+      Forward test baru bisa dipercaya setelah sekitar 100 putaran per gaya. Semua ini simulasi; tidak ada dompet atau uang sungguhan yang dipakai.
+    </div>
+  </div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"}[c]));
+const num = (v, d = 2) => v == null ? "–" : Number(v).toFixed(d);
+const pct = v => v == null ? "–" : (v * 100).toFixed(0) + "%";
+const sgn = (v, d = 2) => v == null ? "–" : `<span class="${v > 0 ? "pos" : v < 0 ? "neg" : ""}">${v > 0 ? "+" : ""}${Number(v).toFixed(d)}</span>`;
+const mult = v => v == null ? "–" : `<span class="${v > 1 ? "pos" : v < 1 ? "neg" : ""}">${Number(v).toFixed(3)}x</span>`;
+const mins = s => s == null ? "–" : s < 60 ? `${Math.round(s)} dtk` : s < 3600 ? `${(s / 60).toFixed(1)} mnt` : `${(s / 3600).toFixed(1)} jam`;
+const day = ts => ts ? new Date(ts * 1000).toLocaleString("id-ID", {day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit"}) : "–";
+const age = r => r.age_days == null ? '<span class="dim">belum dicek</span>' : `${r.capped ? "≥ " : ""}${Math.floor(r.age_days)} hari`;
+
+function addr(w) {
+  return `<span class="addr"><code title="${esc(w)}">${esc(w.slice(0, 6))}…${esc(w.slice(-4))}</code>` +
+    `<button class="copy" data-w="${esc(w)}" title="Salin alamat lengkap">salin</button>` +
+    `<a href="https://solscan.io/account/${encodeURIComponent(w)}" target="_blank" rel="noopener noreferrer">solscan ↗</a></span>`;
+}
+
+document.addEventListener("click", e => {
+  const b = e.target.closest(".copy");
+  if (!b) return;
+  navigator.clipboard?.writeText(b.dataset.w).then(() => { b.textContent = "tersalin"; setTimeout(() => b.textContent = "salin", 1200); });
+});
+
+function render(d) {
+  const R = d.rules;
+  $("age-rule").textContent = R.min_age;
+  $("rules").innerHTML = [
+    `WIN RATE <b>${pct(R.win[0])}–${pct(R.win[1])}</b>`, `FREKUENSI <b>${R.per_day[0]}–${R.per_day[1]} koin/hari</b>`,
+    `MODAL <b>${R.size[0]}–${R.size[1]} SOL</b>`, `PEGANG <b>≥ ${R.min_hold / 60} mnt</b>`,
+    `CUT LOSS <b>≥ ${pct(R.cut_loss)} putaran rugi</b>`,
+    `PERINGKAT <b>1–${R.top}</b>`, `UMUR <b>≥ ${R.min_age} hari</b>`,
+    `PUTARAN <b>≥ ${R.min_trips}</b> (holder ≥ ${R.min_trips_holder})`, `ROI <b>&gt; 1,00x</b>`,
+    `DIBEDAH <b>${d.n_profiles ?? 0} dompet</b>`].map(t => `<span class="chip">${t}</span>`).join("");
+
+  const last = d.groups.filter(g => g.ts === d.last_run);
+  const fast = last.filter(g => g.delay === Math.min(...last.map(x => x.delay)));
+  const n = fast.reduce((a, g) => a + g.n, 0);
+  const sop = n ? fast.reduce((a, g) => a + g.sop_mean * g.n, 0) / n : null;
+  $("kpis").innerHTML = [
+    ["Leader aktif", d.leaders.length, `dari ${d.board.length} dompet di leaderboard`],
+    ["Putaran forward test", n || 0, d.last_run ? `terakhir dinilai ${day(d.last_run)}` : "belum pernah dijalankan"],
+    ["SOP bertahap (tercepat)", sop == null ? "–" : `<span class="${sop > 1 ? "pos" : "neg"}">${sop.toFixed(3)}x</span>`, "rata-rata semua gaya, telat paling kecil"],
+    ["Status", n >= 100 ? "cukup data" : "kumpulkan data", n >= 100 ? "hasil mulai bisa dinilai" : "butuh ≈ 100 putaran per gaya"],
+  ].map(([k, v, s]) => `<div class="kpi"><div class="k">${k}</div><div class="v">${v}</div><div class="s">${s}</div></div>`).join("");
+
+  const wr = d.wallet_runs || {};
+  $("leaders").innerHTML = d.leaders.length ? `<thead><tr><th>#</th><th class="l">Dompet</th><th class="l">Gaya pegang</th><th>Umur</th>
+    <th>PnL SOL</th><th>ROI</th><th>Win</th><th>Putaran</th><th>Pegang</th><th>Masuk</th><th class="l">Dipilih</th>
+    <th>Forward n</th><th>Leader</th><th>SOP kita</th></tr></thead><tbody>` + d.leaders.map(r => {
+      const runs = (wr[r.wallet] || []).sort((a, b) => a.delay - b.delay);
+      const f = runs[0] || {};
+      return `<tr><td>${r.rank ?? "–"}</td><td class="l">${addr(r.wallet)}</td><td class="l">${esc(r.group)}</td><td>${age(r)}</td>
+        <td>${sgn(r.pnl_sol)}</td><td>${num(r.roi)}x</td><td>${pct(r.win_rate)}</td><td>${r.n_closed ?? "–"}</td>
+        <td>${mins(r.med_hold)}</td><td>${r.med_delay == null ? "–" : num(r.med_delay, 1) + " dtk"}</td><td class="l">${day(r.picked)}</td>
+        <td>${f.n ?? 0}</td><td>${mult(f.lead_mean)}</td><td>${mult(f.sop_mean)}</td></tr>`;
+    }).join("") + "</tbody>" : `<tbody><tr><td class="empty">Belum ada leader yang lolos filter. Pembedahan dompet masih berjalan.</td></tr></tbody>`;
+
+  const byRun = {};
+  d.groups.forEach(g => (byRun[g.ts] = byRun[g.ts] || []).push(g));
+  const runs = Object.keys(byRun).map(Number).sort((a, b) => b - a).slice(0, 6);
+  $("groups").innerHTML = runs.length ? `<thead><tr><th class="l">Dinilai</th><th class="l">Gaya</th><th>Dompet</th><th>Telat</th><th>Putaran</th>
+    <th>Ikut leader</th><th>Untung</th><th>SOP bertahap</th><th>Untung</th></tr></thead><tbody>` +
+    runs.flatMap(ts => byRun[ts].map(g => `<tr><td class="l">${day(g.ts)}</td><td class="l">${esc(g.grp)}</td><td>${g.n_wallets}</td>
+      <td>${g.delay} slot</td><td>${g.n}</td><td>${mult(g.follow_mean)}</td><td>${pct(g.follow_win)}</td><td>${mult(g.sop_mean)}</td>
+      <td>${pct(g.sop_win)}</td></tr>`)).join("") + "</tbody>"
+    : `<tbody><tr><td class="empty">Belum ada hasil. Forward test berjalan otomatis tiap 6 jam setelah leader dipilih.</td></tr></tbody>`;
+
+  if (d.source) $("board-src").textContent = `peringkat dari leaderboard ${d.source}, dinilai dengan filter kita · diambil ${day(d.board[0]?.src_ts)}`;
+  $("board").innerHTML = d.board.length ? `<thead><tr><th>#</th><th class="l">Dompet</th>${d.source ? '<th class="l">Nama pump.fun</th><th>Profit pump.fun</th>' : ""}
+    <th class="l">Gaya pegang</th><th>Umur</th>
+    <th>PnL SOL</th><th>ROI</th><th>Win</th><th>Putaran</th><th>Pegang</th><th class="l">Status</th></tr></thead><tbody>` +
+    d.board.map((r, i) => {
+      const st = r.leader ? '<span class="tag ok">di-copy</span>'
+        : !r.profiled ? '<span class="tag wait">sedang dibedah</span>'
+        : (r.reject || []).length ? `<span class="tag no">ditolak</span> <span class="dim">${esc(r.reject.join(" · "))}</span>`
+        : r.age_days == null ? '<span class="tag wait">umur belum dicek</span>'
+        : r.age_days < R.min_age ? `<span class="tag no">umur &lt; ${R.min_age} hari</span>` : '<span class="tag">kuota penuh</span>';
+      const src = d.source ? `<td class="l">@${esc(r.src_name)}</td><td>${r.src_pnl == null ? "–" : "$" + Math.round(r.src_pnl).toLocaleString("id-ID")}</td>` : "";
+      return `<tr><td>${r.src_rank ?? i + 1}</td><td class="l">${addr(r.wallet)}</td>${src}<td class="l">${esc(r.group)}</td><td>${age(r)}</td>
+        <td>${sgn(r.pnl_sol)}</td><td>${num(r.roi)}x</td><td>${pct(r.win_rate)}</td><td>${r.n_closed ?? "–"}</td>
+        <td>${mins(r.med_hold)}</td><td class="l">${st}</td></tr>`;
+    }).join("") + "</tbody>" : `<tbody><tr><td class="empty">Belum ada dompet untung yang cukup putaran.</td></tr></tbody>`;
+  $("rejected").innerHTML = d.rejected.length ? `<thead><tr><th class="l">Dompet</th><th>PnL SOL</th><th>Win</th><th>Koin/hari</th>
+    <th>Modal</th><th>Pegang</th><th class="l">Alasan ditolak</th></tr></thead><tbody>` + d.rejected.map(r =>
+      `<tr><td class="l">${addr(r.wallet)}</td><td>${sgn(r.pnl_sol)}</td><td>${pct(r.win_rate)}</td><td>${num(r.trades_per_day, 0)}</td>
+       <td>${num(r.med_cost)} SOL</td><td>${mins(r.med_hold)}</td><td class="l dim">${esc((r.reject || []).join(" · "))}</td></tr>`).join("") + "</tbody>"
+    : `<tbody><tr><td class="empty">Belum ada dompet yang dinilai.</td></tr></tbody>`;
+  $("upd").textContent = new Date().toLocaleTimeString("id-ID");
+}
+
+async function load() {
+  try {
+    const r = await fetch("/api/copy");
+    const d = await r.json();
+    if (d.error) throw new Error(d.error);
+    render(d);
+  } catch (e) {
+    $("leaders").innerHTML = `<tbody><tr><td class="err">Gagal memuat data: ${esc(e.message)}</td></tr></tbody>`;
+  }
+}
+load();
+setInterval(load, 60000);
+</script>
+</body>
+</html>

@@ -65,6 +65,7 @@ class Settings:
     # --- biaya (perkiraan) ---
     fee_pct: float = 0.01               # fee platform per sisi
     tx_cost_sol: float = 0.0001         # biaya jaringan + priority fee per transaksi
+    extra_cost_pct: float = 0.0         # priority fee/tip tambahan per transaksi, sebagai bagian dari modal per koin
     # slippage dinamis: minimal kecil, membesar kalau harga sedang bergerak cepat saat transaksi
     # slippage = min + k x |perubahan harga dalam 8 detik terakhir|, dibatasi maksimal
     slippage_min: float = 0.005         # slippage dasar per sisi (model terkalibrasi, lihat costs.py)

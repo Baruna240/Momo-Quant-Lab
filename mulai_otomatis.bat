@@ -5,5 +5,6 @@ cd /d "%~dp0"
 timeout /t 30 /nobreak >nul
 start "Simulator meme coin - JANGAN DITUTUP" /min cmd /k python sim.py
 start "Simulator altcoin - JANGAN DITUTUP" /min cmd /k python altcoin.py
+start "Simulator saham BEI - JANGAN DITUTUP" /min cmd /k python saham.py
 timeout /t 3 /nobreak >nul
 start "Dashboard meme coin" /min cmd /k python dashboard.py --no-browser

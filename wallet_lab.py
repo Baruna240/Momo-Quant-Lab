@@ -4,6 +4,11 @@ Jalankan: python wallet_lab.py discover --tokens 40 --early 25   (cari dompet ya
           python wallet_lab.py profile --top 15 --txs 400        (bedah riwayat transaksi dompet-dompet itu)
           python wallet_lab.py wallet <ALAMAT> --txs 400         (bedah satu dompet publik pilihanmu)
           python wallet_lab.py report                            (ringkasan + usulan varian simulator)
+          python wallet_lab.py pick --per-group 6                (kunci leader per gaya pegang: kilat / cepat / holder)
+          python wallet_lab.py forward --loop 6                  (uji copy-trade transaksi BARU, ulang tiap 6 jam)
+          python wallet_lab.py fwdreport                         (riwayat hasil forward test per gaya pegang)
+          python wallet_lab.py import leaderboard.txt --source pumpfun   (dompet dari leaderboard luar, urut = peringkat)
+          python wallet_lab.py pick --source pumpfun             (leader hanya dari peringkat 1-10 leaderboard itu)
 
 Cara kerja:
 1. discover: untuk token pump.fun yang sudah direkam simulator (token_features), ambil transaksi PALING AWAL
@@ -24,6 +29,7 @@ import sys
 import time
 
 import httpx
+from pathlib import Path
 
 from config import BASE_DIR, DB_PATH, load_settings
 
@@ -34,6 +40,20 @@ MAX_SIG_PAGES = 6        # token yang terlalu ramai (>6000 transaksi) dilewati: 
 CLOSED_FRAC = 0.98       # dianggap sudah keluar jika >=98% token yang dibeli sudah dijual
 MIN_TRIPS = 20           # dompet baru dinilai setelah punya minimal 20 putaran selesai
 DUST_SOL = 0.0005        # token keluar dengan SOL masuk sekecil ini = dipindah, bukan dijual
+PROFILE_MAX_PAGES = 10   # paling banyak 10.000 tanda tangan dibaca per dompet saat membedah
+MIN_TRIPS_HOLDER = 10    # holder lebih jarang bertransaksi: cukup 10 putaran selesai
+LEADERBOARD_TOP = 10     # leader hanya dari peringkat 1-10 leaderboard kita
+MIN_AGE_DAYS = 14        # ... dan dompetnya sudah aktif minimal 14 hari (dilonggarkan 2026-11-18)
+AGE_ENOUGH_DAYS = 120    # cek umur berhenti setelah tahu dompet >= 120 hari (hemat kuota)
+AGE_MAX_PAGES = 150      # paling banyak 150.000 transaksi dibaca untuk menentukan umur
+# 2026-11-18: filter DILONGGARKAN atas permintaan user (berani risiko; forward test yang menilai).
+# Filter perilaku "smart wallet" yang masih bisa ditiru (bukan bot sniper / MEV yang pasti lebih cepat dari kita)
+WIN_RANGE = (0.35, 1.00)         # win rate 100% = mencurigakan (wash/sampel kecil), < 50% = sering kalah
+TRADES_PER_DAY = (1, 300)        # > 20 koin/hari = bot frekuensi tinggi
+SIZE_SOL = (0.1, 10.0)           # modal median per koin
+MIN_HOLD_SEC = 30                # pegang median minimal 5 menit (sniper menjual dalam detik)
+CUT_LOSS_MIN = 0.0               # >= 50% putaran rugi ditutup saat masih bernilai >= 30% modal (bukan ditahan sampai nol)
+MIN_LOSSES = 0                   # cut loss baru bisa dinilai kalau sudah pernah rugi minimal 3 kali
 
 
 def log(msg):
@@ -53,17 +73,38 @@ def open_lab():
     CREATE TABLE IF NOT EXISTS scanned (mint TEXT PRIMARY KEY, ts REAL, created REAL, creator TEXT, status TEXT);
     CREATE TABLE IF NOT EXISTS profiles (wallet TEXT PRIMARY KEY, ts REAL, stats TEXT);
     CREATE TABLE IF NOT EXISTS leaders (wallet TEXT PRIMARY KEY, picked REAL, stats TEXT);
+    CREATE TABLE IF NOT EXISTS forward_runs (ts REAL, grp TEXT, delay INTEGER, n INTEGER, n_wallets INTEGER,
+                                             follow_mean REAL, follow_win REAL, sop_mean REAL, sop_win REAL);
+    CREATE TABLE IF NOT EXISTS sources (wallet TEXT, source TEXT, rank INTEGER, name TEXT, pnl_usd REAL, ts REAL,
+                                        PRIMARY KEY (wallet, source));
+    CREATE TABLE IF NOT EXISTS forward_wallets (ts REAL, wallet TEXT, delay INTEGER, n INTEGER, lead_mean REAL,
+                                                follow_mean REAL, sop_mean REAL, sop_win REAL, skipped INTEGER);
     """)
     return db
 
 
-def parse_tx(tx):
-    """Transaksi mentah (encoding json) -> perubahan SOL & token milik si pembayar fee."""
+def parse_tx(tx, owner=None):
+    """Transaksi mentah (encoding json) -> perubahan SOL & token milik si PEDAGANG.
+    Biasanya pedagang = pembayar fee. Tapi aplikasi pump.fun membayarkan fee lewat akun relayer: kalau pembayar fee
+    tidak memegang token apa pun di transaksi itu, pedagangnya adalah penanda tangan lain yang token-nya berubah."""
     meta = tx.get("meta")
     if not meta:
         return None
-    payer = tx["transaction"]["message"]["accountKeys"][0]
-    sol = (meta["postBalances"][0] - meta["preBalances"][0]) / 1e9   # sudah termasuk fee & tip
+    msg = tx["transaction"]["message"]
+    keys = msg["accountKeys"]
+    n_sig = (msg.get("header") or {}).get("numRequiredSignatures", 1)
+    holders = {b.get("owner") for side in ("preTokenBalances", "postTokenBalances")
+               for b in meta.get(side) or [] if b["mint"] != WSOL}
+    la = meta.get("loadedAddresses") or {}
+    allk = keys + la.get("writable", []) + la.get("readonly", [])
+    i = 0
+    if owner and owner in holders:
+        # dompet yang sedang dibedah memegang token di transaksi ini, walau ditandatangani akun sesi aplikasi
+        i = allk.index(owner) if owner in allk else None
+    elif keys[0] not in holders:
+        i = next((k for k in range(1, n_sig) if keys[k] in holders), 0)
+    payer = owner if i is None else allk[i]
+    sol = 0.0 if i is None else (meta["postBalances"][i] - meta["preBalances"][i]) / 1e9   # termasuk fee & tip kalau dia yang bayar
     deltas = {}
     for side, sign in (("preTokenBalances", -1), ("postTokenBalances", 1)):
         for b in meta.get(side) or []:
@@ -72,17 +113,41 @@ def parse_tx(tx):
                 deltas[b["mint"]] = deltas.get(b["mint"], 0.0) + sign * amt
     sol += deltas.pop(WSOL, 0.0)       # sebagian bot berdagang lewat akun wSOL
     return {"wallet": payer, "ts": tx.get("blockTime") or 0, "slot": tx.get("slot") or 0, "sol": sol,
-            "fee": meta.get("fee", 0) / 1e9, "tokens": {m: d for m, d in deltas.items() if abs(d) > 1e-9},
+            "fee": meta.get("fee", 0) / 1e9 if i == 0 else 0.0, "tokens": {m: d for m, d in deltas.items() if abs(d) > 1e-9},
             "ok": meta.get("err") is None}
 
 
+# stablecoin dihitung sebagai uang (seperti SOL): aplikasi pump.fun kini banyak berdagang memakai saldo USDC
+STABLES = {"EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v": "USDC", "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB": "USDT"}
+_SOL_USD = []
+
+
+def sol_usd():
+    """Harga SOL untuk mengubah USDC ke SOL (dari simulator altcoin; cadangan dari config)."""
+    if not _SOL_USD:
+        px = None
+        try:
+            alt = sqlite3.connect(f"file:{BASE_DIR / 'altcoin.db'}?mode=ro", uri=True)
+            row = alt.execute("SELECT price FROM alt_market WHERE symbol='SOLUSDT'").fetchone()
+            alt.close()
+            px = row and row[0]
+        except sqlite3.Error:
+            pass
+        _SOL_USD.append(px or load_settings().sol_usd_fallback)
+    return _SOL_USD[0]
+
+
 def build_trips(rows):
-    """Daftar transaksi satu dompet -> putaran per koin (beli ... jual)."""
+    """Daftar transaksi satu dompet -> putaran per koin (beli ... jual). Uang = SOL + stablecoin (dikonversi ke SOL)."""
     by_mint = {}
     for r in sorted(rows, key=lambda r: (r["ts"], r["slot"])):
-        if not r["ok"] or len(r["tokens"]) != 1:
+        toks = {m: d for m, d in r["tokens"].items() if m not in STABLES}
+        stable = sum(d for m, d in r["tokens"].items() if m in STABLES)
+        if not r["ok"] or len(toks) != 1:
             continue      # gagal, atau swap antar-token / transaksi rumit: lewati
-        (mint, tok), = r["tokens"].items()
+        if stable:
+            r = {**r, "sol": r["sol"] + stable / sol_usd()}
+        (mint, tok), = toks.items()
         if tok > 0 and r["sol"] < 0:
             kind = "buy"
         elif tok < 0 and r["sol"] > DUST_SOL:
@@ -139,6 +204,8 @@ def wallet_stats(trips, feats):
         "multi_sell": sum(t["n_sells"] > 1 for t in done) / len(done),
         "fee_per_trip": sum(t["fees"] for t in done) / len(done),
         "best": max(t["back"] - t["cost"] for t in done), "worst": min(t["back"] - t["cost"] for t in done),
+        "trades_per_day": len(trips) / span_h * 24, "med_cost": med([t["cost"] for t in done]), "n_losses": len(losers),
+        "cut_loss_share": (sum(t["back"] / t["cost"] >= 0.3 for t in losers if t["cost"]) / len(losers)) if losers else None,
         "open_cost": sum(t["cost"] for t in trips if not t["closed"]),
     }
 
@@ -154,6 +221,22 @@ def style(s):
     if d < 300:
         return "momentum"
     return "pemburu lambat"
+
+
+def hold_group(s):
+    """Kelompok gaya pegang dari median lama memegang: makin lama memegang, makin kecil rugi karena kita telat."""
+    h = s.get("med_hold")
+    if h is None:
+        return "?"
+    if h < 60:
+        return "kilat (<1 mnt)"
+    if h < 900:
+        return "cepat (1-15 mnt)"
+    return "holder (>=15 mnt)"
+
+
+def min_trips(s):
+    return MIN_TRIPS_HOLDER if hold_group(s).startswith("holder") else MIN_TRIPS
 
 
 class Rpc:
@@ -185,7 +268,7 @@ class Rpc:
         await self.http.aclose()
 
 
-async def fetch_txs(rpc, db, sigs):
+async def fetch_txs(rpc, db, sigs, owner=None):
     """Ambil & urai transaksi yang belum ada di cache (hemat kuota: tiap transaksi hanya diambil sekali)."""
     have = {r[0] for r in db.execute(f"SELECT sig FROM tx WHERE sig IN ({','.join('?' * len(sigs))})", sigs)} if sigs else set()
     todo = [s for s in sigs if s not in have]
@@ -198,7 +281,7 @@ async def fetch_txs(rpc, db, sigs):
             if "ditolak" in str(e):
                 raise
             return
-        p = parse_tx(raw) if raw else None
+        p = parse_tx(raw, owner) if raw else None
         if p:
             db.execute("INSERT OR REPLACE INTO tx VALUES (?,?,?,?,?,?,?,?)", (sig, p["wallet"], p["ts"], p["slot"],
                        p["sol"], p["fee"], json.dumps(p["tokens"]), int(p["ok"])))
@@ -226,7 +309,10 @@ def load_features(mints=None):
 
 
 # ---------------------------------------------------------------- discover
-async def discover(rpc, db, n_tokens, early):
+async def discover(rpc, db, n_tokens, early, from_sec=0, to_sec=0):
+    """from_sec/to_sec: ambil pembeli di jendela itu setelah token lahir (mis. 60-1800 dtk = trader yang masuk sesudah
+    para sniper), dipilih merata sampai `early` transaksi. Bawaan 0: `early` transaksi PALING AWAL (pemburu sniper)."""
+    pages = 20 if from_sec else MAX_SIG_PAGES
     feats = load_features()
     done = {r[0] for r in db.execute("SELECT mint FROM scanned")}
     # hanya token bonding curve pump.fun (alamatnya berakhiran "pump"); puncak >100x = harga rusak, bukan pemenang
@@ -240,7 +326,7 @@ async def discover(rpc, db, n_tokens, early):
     log(f"memindai {len(pick)} token (dari {len(recent)} yang belum dipindai)")
     for i, f in enumerate(pick, 1):
         mint, before, sigs, status = f["mint"], None, [], "ok"
-        for _ in range(MAX_SIG_PAGES):
+        for _ in range(pages):
             opts = {"limit": 1000, **({"before": before} if before else {})}
             page = await rpc("getSignaturesForAddress", [mint, opts])
             sigs += page
@@ -250,7 +336,13 @@ async def discover(rpc, db, n_tokens, early):
         else:
             status = "terlalu ramai"
         if status == "ok":
-            oldest = [s["signature"] for s in reversed(sigs) if s.get("err") is None][:early + 1]
+            ok_sigs = [s for s in reversed(sigs) if s.get("err") is None]
+            oldest = [s["signature"] for s in ok_sigs[:early + 1]]
+            if from_sec and ok_sigs and ok_sigs[0].get("blockTime"):
+                t0 = ok_sigs[0]["blockTime"]
+                win = [s["signature"] for s in ok_sigs if s.get("blockTime") and from_sec <= s["blockTime"] - t0 <= to_sec]
+                step = max(1, len(win) // early)
+                oldest = [ok_sigs[0]["signature"]] + win[::step][:early]   # transaksi pembuatan tetap dibaca (pembuat koin)
             txs = await fetch_txs(rpc, db, oldest)
             ordered = [txs[s] for s in oldest if s in txs]
             if not ordered:
@@ -283,21 +375,58 @@ async def discover(rpc, db, n_tokens, early):
 
 
 # ---------------------------------------------------------------- profile
+TOKEN_PROGRAMS = ("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA", "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb")
+FLOODED_OK_SHARE = 0.05   # < 5% transaksi sukses = riwayat dompet dibanjiri transaksi gagal (spam / bot)
+PER_TOKEN_ACCOUNT = 30    # tanda tangan terbaru per akun token saat membaca lewat akun token
+
+
+async def token_account_sigs(rpc, wallet, n_txs, old=()):
+    """Riwayat dompet yang dibanjiri transaksi gagal: baca transaksi lewat AKUN TOKEN miliknya (tiap koin punya akun
+    sendiri, jadi spam di alamat utama tidak ikut). Akun token yang sudah ditutup tidak terbaca."""
+    accs = []
+    for prog in TOKEN_PROGRAMS:
+        r = await rpc("getTokenAccountsByOwner", [wallet, {"programId": prog}, {"encoding": "base64"}])
+        accs += [a["pubkey"] for a in r["value"]]
+    found = {}
+
+    async def one(acc):
+        try:
+            page = await rpc("getSignaturesForAddress", [acc, {"limit": PER_TOKEN_ACCOUNT}])
+        except RuntimeError as e:
+            if "ditolak" in str(e):
+                raise
+            return
+        for x in page:
+            if x.get("err") is None and x["signature"] not in old:
+                found[x["signature"]] = x.get("blockTime") or 0
+
+    for i in range(0, len(accs), 25):
+        await asyncio.gather(*(one(a) for a in accs[i:i + 25]))
+    log(f"  riwayat dibanjiri transaksi gagal: dibaca lewat {len(accs)} akun token -> {len(found)} transaksi")
+    return [sg for sg, _ in sorted(found.items(), key=lambda x: -x[1])][:n_txs]
+
+
 async def profile_wallet(rpc, db, wallet, n_txs, newest_only=False):
     """newest_only: berhenti begitu bertemu transaksi yang sudah tersimpan (hanya ambil yang baru)."""
     old = {r[0] for r in db.execute("SELECT sig FROM wallet_sigs WHERE wallet = ?", (wallet,))} if newest_only else set()
-    before, sigs = None, []
-    while len(sigs) < n_txs:
+    before, sigs, pages, seen = None, [], 0, 0
+    while len(sigs) < n_txs and pages < PROFILE_MAX_PAGES:   # bot spam: ribuan transaksi gagal per menit
+        pages += 1
         opts = {"limit": min(1000, n_txs - len(sigs)), **({"before": before} if before else {})}
         page = await rpc("getSignaturesForAddress", [wallet, opts])
+        seen += len(page)
         sigs += [s["signature"] for s in page if s.get("err") is None]
         if not page or len(page) < opts["limit"] or any(x["signature"] in old for x in page):
             break
+        if pages >= 2 and len(sigs) < seen * FLOODED_OK_SHARE:
+            break   # dibanjiri transaksi gagal: jangan habiskan kuota membaca spam
         before = page[-1]["signature"]
+    if seen >= 1000 and len(sigs) < seen * FLOODED_OK_SHARE:
+        sigs = list(dict.fromkeys(sigs + await token_account_sigs(rpc, wallet, n_txs, old)))
     db.executemany("INSERT OR IGNORE INTO wallet_sigs VALUES (?,?)", [(wallet, s) for s in sigs])
     db.commit()
     known = [r[0] for r in db.execute("SELECT sig FROM wallet_sigs WHERE wallet = ?", (wallet,))]
-    txs = await fetch_txs(rpc, db, known)
+    txs = await fetch_txs(rpc, db, known, owner=wallet)
     rows = [t for t in txs.values() if t["wallet"] == wallet]
     trips = build_trips(rows)
     feats = load_features({t["mint"] for t in trips})
@@ -604,7 +733,7 @@ async def price_path(prices, sigs, mint, start_slot, end_slot):
     return out
 
 
-async def copytest(rpc, db, wallets, n_trips, delays, stake, since=None):
+async def copytest(rpc, db, wallets, n_trips, delays, stake, since=None, title="SEMUA DOMPET"):
     s = load_settings()
     prices = Prices(rpc, db)
     fee, slip = s.fee_pct, s.slippage_min
@@ -619,7 +748,7 @@ async def copytest(rpc, db, wallets, n_trips, delays, stake, since=None):
           f"{COPY_FEE_SOL * 1000:.1f} mSOL/transaksi. Jeda dalam slot (1 slot ~ 0,4 dtk).")
     print(f"SOP: {ladder}, lalu trailing {SOP_TRAIL:.0%} / tutup modal + fee, sisa ditahan sampai leader keluar.")
     total = {d: {"follow": [], "sop": [], "why": []} for d in delays}
-    lead_all = []
+    lead_all, per = [], {}
     for w in wallets:
         rows = [{**dict(r), "tokens": json.loads(r["tokens"])} for r in db.execute(
             "SELECT tx.* FROM tx JOIN wallet_sigs ws ON ws.sig = tx.sig WHERE ws.wallet = ? AND tx.wallet = ?", (w, w))]
@@ -657,12 +786,14 @@ async def copytest(rpc, db, wallets, n_trips, delays, stake, since=None):
                 res[d]["why"].append(why)
             db.commit()
         print_copy(w, res, lead, skipped)
+        per[w] = {"res": res, "lead": lead, "skipped": skipped}
         for d in delays:
             for k in total[d]:
                 total[d][k] += res[d][k]
         lead_all += lead
     if len(wallets) > 1:
-        print_copy("SEMUA DOMPET", total, lead_all, 0)
+        print_copy(title, total, lead_all, 0)
+    return total, per
 
 
 def print_copy(name, res, lead, skipped):
@@ -684,30 +815,210 @@ def print_copy(name, res, lead, skipped):
         print(f"  {d:>3} slot (~{d * 0.4:4.1f}s){len(a):>5} | {cols(a)} | {cols(b)} | {hit:>6.0%}")
 
 
-async def pick_leaders(db, top):
-    prof = [(r["wallet"], json.loads(r["stats"])) for r in db.execute("SELECT * FROM profiles")]
-    best = [(w, st) for w, st in sorted(prof, key=lambda x: -(x[1].get("pnl_sol") or -1e9))
-            if st.get("n_closed", 0) >= MIN_TRIPS and (st.get("roi") or 0) > 1][:top]
-    if not best:
-        sys.exit("Belum ada dompet untung dengan cukup putaran. Jalankan discover + profile dulu.")
+async def wallet_age(rpc, wallet):
+    """Umur dompet = transaksi PERTAMANYA. Dompet bot sangat aktif bisa punya ratusan ribu transaksi: berhenti setelah
+    AGE_MAX_PAGES halaman (hasilnya batas bawah, 'capped') atau begitu umurnya sudah melewati AGE_ENOUGH_DAYS."""
+    before, oldest, pages = None, None, 0
+    while pages < AGE_MAX_PAGES:
+        page = await rpc("getSignaturesForAddress", [wallet, {"limit": 1000, **({"before": before} if before else {})}])
+        pages += 1
+        times = [x["blockTime"] for x in page if x.get("blockTime")]
+        if times:
+            oldest = min(times + ([oldest] if oldest else []))
+        if len(page) < 1000:
+            return {"first_ts": oldest, "age_days": (time.time() - oldest) / 86400 if oldest else 0, "capped": False}
+        if oldest and time.time() - oldest >= AGE_ENOUGH_DAYS * 86400:
+            break
+        before = page[-1]["signature"]
+    return {"first_ts": oldest, "age_days": (time.time() - oldest) / 86400 if oldest else 0, "capped": True}
+
+
+def restat(db, wallet):
+    """Hitung ulang statistik satu dompet dari transaksi yang sudah tersimpan (tanpa panggilan RPC)."""
+    rows = [{**dict(r), "tokens": json.loads(r["tokens"])} for r in db.execute(
+        "SELECT tx.* FROM tx JOIN wallet_sigs ws ON ws.sig = tx.sig WHERE ws.wallet = ? AND tx.wallet = ?", (wallet, wallet))]
+    trips = build_trips(rows)
+    st = wallet_stats(trips, load_features({t["mint"] for t in trips}))
+    st["style"] = style(st)
+    st["n_tx"] = len(rows)
+    return st
+
+
+def behavior_check(st):
+    """Daftar alasan dompet DITOLAK oleh filter perilaku (kosong = lolos)."""
+    why = []
+    if st.get("n_closed", 0) < min_trips(st):
+        why.append(f"putaran {st.get('n_closed', 0)} < {min_trips(st)}")
+    if (st.get("roi") or 0) <= 1:
+        why.append("tidak untung")
+    wr = st.get("win_rate")
+    if wr is None or not WIN_RANGE[0] <= wr <= WIN_RANGE[1]:
+        why.append(f"win rate {fmt(wr and wr * 100, '.0f')}% di luar {WIN_RANGE[0]:.0%}-{WIN_RANGE[1]:.0%}")
+    tpd = st.get("trades_per_day")
+    if tpd is None or not TRADES_PER_DAY[0] <= tpd <= TRADES_PER_DAY[1]:
+        why.append(f"{fmt(tpd, '.0f')} koin/hari" + (" (bot)" if (tpd or 0) > TRADES_PER_DAY[1] else ""))
+    size = st.get("med_cost")
+    if size is None or not SIZE_SOL[0] <= size <= SIZE_SOL[1]:
+        why.append(f"modal {fmt(size)} SOL")
+    if (st.get("med_hold") or 0) < MIN_HOLD_SEC:
+        why.append(f"pegang {fmt(st.get('med_hold') and st['med_hold'] / 60, '.1f')} mnt" +
+                   (" (sniper)" if (st.get("med_hold") or 0) < 60 else ""))
+    if (st.get("n_losses") or 0) < MIN_LOSSES or (st.get("cut_loss_share") or 0) < CUT_LOSS_MIN:
+        why.append("tidak disiplin cut loss" if (st.get("n_losses") or 0) >= MIN_LOSSES else "riwayat rugi terlalu sedikit")
+    return why
+
+
+async def import_wallets(rpc, db, path, source, n_txs):
+    """Baca daftar dompet dari leaderboard luar (satu per baris: ALAMAT [nama] [pnl_usd], urutan = peringkat),
+    simpan sebagai snapshot terbaru sumber itu, lalu bedah setiap dompet."""
+    rows = []
+    for line in Path(path).read_text(encoding="utf-8").splitlines():
+        part = line.split()
+        if part and not part[0].startswith("#"):
+            pnl = float(part[2]) if len(part) > 2 else None
+            rows.append((part[0], part[1] if len(part) > 1 else "", pnl))
     now = time.time()
-    db.executemany("INSERT OR REPLACE INTO leaders VALUES (?,?,?)", [(w, now, json.dumps(st)) for w, st in best])
+    db.execute("DELETE FROM sources WHERE source=?", (source,))     # snapshot baru menggantikan peringkat lama
+    db.executemany("INSERT INTO sources VALUES (?,?,?,?,?,?)",
+                   [(w, source, i, name, pnl, now) for i, (w, name, pnl) in enumerate(rows, 1)])
     db.commit()
-    print(f"Leader dipilih {time.strftime('%Y-%m-%d %H:%M')} (hanya dari data SEBELUM saat ini):")
-    for w, st in best:
-        print(f"  {w}  PnL {st['pnl_sol']:+.2f} SOL, ROI {st['roi']:.2f}x, {st['n_closed']} putaran")
-    print("Jalankan 'python wallet_lab.py forward' beberapa jam / hari lagi untuk menguji transaksi BARU mereka.")
+    for i, (w, name, _) in enumerate(rows, 1):
+        log(f"[{i}/{len(rows)}] membedah #{i} {name} {w}")
+        try:
+            print_profile(w, await profile_wallet(rpc, db, w, n_txs))
+        except RuntimeError as e:
+            if "ditolak" in str(e):
+                raise
+            log(f"  dilewati: {e}")
+
+
+def manual_leaders(db):
+    """Dompet yang diperintahkan user untuk diikuti (source 'manual'): tidak pernah dilepas oleh filter pick."""
+    return {r[0] for r in db.execute("SELECT wallet FROM sources WHERE source='manual'")}
+
+
+async def pick_leaders(rpc, db, top, per_group=0, source=None):
+    """Kunci leader dari data SEBELUM saat ini. Filter keamanan:
+    1. peringkat 1-LEADERBOARD_TOP di leaderboard kita (dompet untung, cukup putaran, diurutkan menurut PnL SOL)
+    2. umur dompet >= MIN_AGE_DAYS (dompet baru/burner sering dipakai untuk pump & dump atau umpan copy-trader)
+    per_group > 0: dari yang lolos, paling banyak sejumlah itu per gaya pegang. Leader lama yang tidak lolos filter
+    dilepas; yang lolos tidak diganti waktu pilihnya, supaya riwayat forward test-nya tetap utuh."""
+    prof = []
+    for r in db.execute("SELECT * FROM profiles").fetchall():
+        st = {**json.loads(r["stats"]), **restat(db, r["wallet"])}      # statistik terbaru dari cache, tanpa RPC
+        st["reject"] = behavior_check(st)
+        db.execute("UPDATE profiles SET stats=? WHERE wallet=?", (json.dumps(st), r["wallet"]))
+        prof.append((r["wallet"], st))
+    db.commit()
+    rejected = [(w, st) for w, st in prof if st["reject"]]
+    print(f"Filter perilaku: {len(prof) - len(rejected)} dari {len(prof)} dompet lolos "
+          f"(win {WIN_RANGE[0]:.0%}-{WIN_RANGE[1]:.0%}, {TRADES_PER_DAY[0]}-{TRADES_PER_DAY[1]} koin/hari, modal "
+          f"{SIZE_SOL[0]}-{SIZE_SOL[1]} SOL, pegang >= {MIN_HOLD_SEC // 60} mnt, disiplin cut loss)")
+    shown = [x for x in rejected if not source or x[0] in {r[0] for r in db.execute(
+        "SELECT wallet FROM sources WHERE source=?", (source,))}]
+    for w, st in sorted(shown, key=lambda x: -(x[1].get("pnl_sol") or -1e9))[:15]:
+        print(f"  ditolak {w[:8]}...  " + "; ".join(st["reject"]))
+    if source:   # peringkat dari leaderboard luar (mis. pump.fun), bukan dari untung yang kita hitung
+        rank = {r[0]: r[1] for r in db.execute("SELECT wallet, rank FROM sources WHERE source=? AND rank<=?",
+                                               (source, LEADERBOARD_TOP))}
+        board = sorted([(w, st) for w, st in prof if w in rank and not st["reject"]], key=lambda x: rank[x[0]])
+        print(f"Sumber: leaderboard {source} peringkat 1-{LEADERBOARD_TOP} ({len(rank)} dompet), "
+              f"{len(board)} lolos filter perilaku")
+    else:
+        board = [(w, st) for w, st in sorted(prof, key=lambda x: -(x[1].get("pnl_sol") or -1e9))
+                 if not st["reject"]][:LEADERBOARD_TOP]
+    gone = [r[0] for r in db.execute("SELECT wallet FROM leaders") if r[0] not in {w for w, _ in board}
+            and r[0] not in manual_leaders(db)]
+    if not board:
+        db.executemany("DELETE FROM leaders WHERE wallet=?", [(w,) for w in gone])
+        db.commit()
+        print(f"Belum ada dompet yang lolos filter perilaku ({len(gone)} leader lama dilepas). "
+              "Cari kandidat baru: python wallet_lab.py discover --from-sec 60 --to-sec 1800 lalu profile")
+        return
+    print("Leaderboard (lolos filter perilaku, diurutkan menurut PnL) + cek umur:")
+    ok, seen = [], {}
+    src_rank = {r[0]: r[1] for r in db.execute("SELECT wallet, rank FROM sources WHERE source=?", (source,))} if source else {}
+    for rank, (w, st) in enumerate(board, 1):
+        rank = src_rank.get(w, rank)
+        age = await wallet_age(rpc, w)
+        st.update(rank=rank, **age)
+        db.execute("UPDATE profiles SET stats=? WHERE wallet=?", (json.dumps(st), w))
+        g = hold_group(st)
+        old = age["age_days"] >= MIN_AGE_DAYS
+        take = old and (not per_group or seen.get(g, 0) < per_group) and (per_group or len(ok) < top)
+        if take:
+            ok.append((w, st))
+            seen[g] = seen.get(g, 0) + 1
+        why = "DIPILIH" if take else ("umur < %d hari" % MIN_AGE_DAYS if not old else "kuota gaya penuh")
+        print(f"  #{rank:<2} {w}  umur {'>=' if age['capped'] else ''}{age['age_days']:.0f} hr  {g:<18} "
+              f"PnL {st['pnl_sol']:+.2f} SOL  ROI {st['roi']:.2f}x  -> {why}")
+    db.commit()
+    keep = {w for w, _ in ok}
+    gone = [r[0] for r in db.execute("SELECT wallet FROM leaders") if r[0] not in keep
+            and r[0] not in manual_leaders(db)]
+    db.executemany("DELETE FROM leaders WHERE wallet=?", [(w,) for w in gone])
+    now = time.time()
+    db.executemany("INSERT OR IGNORE INTO leaders VALUES (?,?,?)", [(w, now, json.dumps(st)) for w, st in ok])
+    db.executemany("UPDATE leaders SET stats=? WHERE wallet=?", [(json.dumps(st), w) for w, st in ok])
+    db.commit()
+    if gone:
+        print(f"{len(gone)} leader lama dilepas (tidak lolos filter peringkat/umur).")
+    if not ok:
+        print("Tidak ada dompet yang lolos kedua filter. Bedah lebih banyak dompet: discover + profile.")
+        return
+    print(f"{len(ok)} leader aktif. Forward test hanya menilai transaksi SESUDAH dipilih: python wallet_lab.py forward")
 
 
 async def forward(rpc, db, n_trips, delays, stake, txs):
-    leaders = {r["wallet"]: r["picked"] for r in db.execute("SELECT wallet, picked FROM leaders")}
+    leaders = {r["wallet"]: (r["picked"], json.loads(r["stats"])) for r in db.execute("SELECT * FROM leaders")}
     if not leaders:
-        sys.exit("Belum ada leader. Jalankan dulu: python wallet_lab.py pick")
-    for w in leaders:
-        log(f"mengambil transaksi baru {w[:8]}... (dipilih {(time.time() - leaders[w]) / 3600:.1f} jam lalu)")
+        log("Belum ada leader yang lolos filter; dicoba lagi di putaran berikutnya (pick setelah discover + profile).")
+        return
+    for w, (picked, _) in leaders.items():
+        log(f"mengambil transaksi baru {w[:8]}... (dipilih {(time.time() - picked) / 3600:.1f} jam lalu)")
         await profile_wallet(rpc, db, w, txs, newest_only=True)
     print("FORWARD TEST: hanya transaksi yang terjadi SESUDAH leader dipilih (tanpa bias pemilihan).")
-    await copytest(rpc, db, list(leaders), n_trips, delays, stake, since=leaders)
+    groups = {}
+    for w, (_, st) in leaders.items():
+        groups.setdefault(hold_group(st), []).append(w)
+    now = time.time()
+    for g, ws in sorted(groups.items()):
+        print(f"\n################ GAYA: {g} ({len(ws)} dompet)")
+        total, per = await copytest(rpc, db, ws, n_trips, delays, stake,
+                                    since={w: leaders[w][0] for w in ws}, title=f"GABUNGAN {g}")
+        for w, x in per.items():
+            for d, r in x["res"].items():
+                a, b = r["follow"], r["sop"]
+                db.execute("INSERT INTO forward_wallets VALUES (?,?,?,?,?,?,?,?,?)",
+                           (now, w, d, len(a), sum(x["lead"]) / len(x["lead"]) if x["lead"] else None,
+                            sum(a) / len(a) if a else None, sum(b) / len(b) if b else None,
+                            sum(v > 1 for v in b) / len(b) if b else None, x["skipped"]))
+        for d, r in total.items():
+            a, b = r["follow"], r["sop"]
+            if a:
+                db.execute("INSERT INTO forward_runs VALUES (?,?,?,?,?,?,?,?,?)",
+                           (now, g, d, len(a), len(ws), sum(a) / len(a), sum(x > 1 for x in a) / len(a),
+                            sum(b) / len(b), sum(x > 1 for x in b) / len(b)))
+        db.commit()
+
+
+def fwd_report(db):
+    rows = db.execute("SELECT * FROM forward_runs ORDER BY ts, grp, delay").fetchall()
+    if not rows:
+        print("Belum ada hasil. Jalankan: python wallet_lab.py forward")
+        return
+    since = min(r[0] for r in db.execute("SELECT picked FROM leaders"))
+    print(f"Forward test sejak {time.strftime('%Y-%m-%d %H:%M', time.localtime(since))}. "
+          "Kelipatan modal per koin sesudah semua biaya (1,00x = impas).")
+    print(f"{'waktu':<13}{'gaya':<19}{'telat':>8}{'n':>6} | {'ikut leader':>12}{'untung':>8} | {'SOP':>8}{'untung':>8}")
+    last = max(r["ts"] for r in rows)
+    for r in rows:
+        if r["ts"] < last - 7 * 86400:
+            continue
+        mark = "  <- terbaru" if r["ts"] == last else ""
+        print(f"{time.strftime('%m-%d %H:%M', time.localtime(r['ts'])):<13}{r['grp']:<19}{r['delay']:>4} slt{r['n']:>6} | "
+              f"{r['follow_mean']:>11.3f}x{r['follow_win']:>8.0%} | {r['sop_mean']:>7.3f}x{r['sop_win']:>8.0%}{mark}")
+    print("Butuh minimal ~100 putaran per gaya sebelum hasilnya bisa dipercaya; di bawah itu masih bisa kebetulan.")
 
 
 async def main_async(args):
@@ -718,21 +1029,35 @@ async def main_async(args):
     rpc = Rpc(s.rpc_url)
     try:
         if args.cmd == "discover":
-            await discover(rpc, db, args.tokens, args.early)
+            await discover(rpc, db, args.tokens, args.early, args.from_sec, args.to_sec)
         elif args.cmd == "profile":
-            wallets = [r[0] for r in db.execute("""SELECT wallet, COUNT(*) n FROM early_buys GROUP BY wallet
-                                                   HAVING n >= ? ORDER BY n DESC, AVG(d_sec) LIMIT ?""", (args.min_hits, args.top))]
+            done = {r[0] for r in db.execute("SELECT wallet FROM profiles")}
+            wallets = [r[0] for r in db.execute("""SELECT wallet, COUNT(*) n FROM early_buys WHERE d_sec >= ? GROUP BY wallet
+                                                   HAVING n >= ? ORDER BY n DESC, AVG(d_sec) LIMIT ?""",
+                                                (args.min_delay, args.min_hits, args.top * 3)) if r[0] not in done][:args.top]
             if not wallets:
                 sys.exit("Belum ada kandidat. Jalankan dulu: python wallet_lab.py discover")
             for i, w in enumerate(wallets, 1):
                 log(f"[{i}/{len(wallets)}] membedah {w}")
-                print_profile(w, await profile_wallet(rpc, db, w, args.txs))
+                try:
+                    print_profile(w, await profile_wallet(rpc, db, w, args.txs))
+                except RuntimeError as e:   # satu dompet bermasalah (mis. bot spam) tidak menghentikan yang lain
+                    if "ditolak" in str(e):
+                        raise
+                    log(f"  dilewati: {e}")
         elif args.cmd == "copytest":
             await copytest(rpc, db, args.wallets, args.trips, args.delays, args.stake)
         elif args.cmd == "pick":
-            await pick_leaders(db, args.top)
+            await pick_leaders(rpc, db, args.top, args.per_group, args.source)
+        elif args.cmd == "import":
+            await import_wallets(rpc, db, args.file, args.source, args.txs)
         elif args.cmd == "forward":
-            await forward(rpc, db, args.trips, args.delays, args.stake, args.txs)
+            while True:
+                await forward(rpc, db, args.trips, args.delays, args.stake, args.txs)
+                if not args.loop:
+                    break
+                log(f"forward berikutnya {args.loop} jam lagi")
+                await asyncio.sleep(args.loop * 3600)
         elif args.cmd == "wallet":
             print_profile(args.address, await profile_wallet(rpc, db, args.address, args.txs))
         log(f"selesai, {rpc.calls} panggilan RPC")
@@ -747,10 +1072,13 @@ def main():
     d = sub.add_parser("discover", help="cari dompet yang berulang kali beli paling awal")
     d.add_argument("--tokens", type=int, default=40)
     d.add_argument("--early", type=int, default=25, help="berapa transaksi pertama tiap token yang dibaca")
+    d.add_argument("--from-sec", type=int, default=0, help="ambil pembeli mulai detik ke-N setelah token lahir")
+    d.add_argument("--to-sec", type=int, default=1800, help="... sampai detik ke-N")
     p = sub.add_parser("profile", help="bedah dompet kandidat hasil discover")
     p.add_argument("--top", type=int, default=15)
     p.add_argument("--min-hits", type=int, default=2)
     p.add_argument("--txs", type=int, default=400)
+    p.add_argument("--min-delay", type=float, default=0, help="hanya pembeli yang masuk >= N dtk setelah token lahir")
     w = sub.add_parser("wallet", help="bedah satu dompet publik")
     w.add_argument("address")
     w.add_argument("--txs", type=int, default=400)
@@ -763,20 +1091,28 @@ def main():
     c.add_argument("--delays", type=int, nargs="+", default=[1, 3, 10, 25], help="jeda dalam slot")
     c.add_argument("--stake", type=float, default=0.25, help="modal SOL per koin")
     k = sub.add_parser("pick", help="kunci daftar leader sekarang untuk forward test")
-    k.add_argument("--top", type=int, default=5)
+    k.add_argument("--top", type=int, default=LEADERBOARD_TOP)
+    k.add_argument("--per-group", type=int, default=0, help="ambil N leader dari tiap gaya pegang")
+    k.add_argument("--source", help="peringkat dari leaderboard luar yang sudah di-import (mis. pumpfun)")
+    im = sub.add_parser("import", help="bedah dompet dari leaderboard luar (file: satu alamat per baris)")
+    im.add_argument("file")
+    im.add_argument("--source", default="pumpfun")
+    im.add_argument("--txs", type=int, default=800)
     f = sub.add_parser("forward", help="uji copy-trade hanya pada transaksi leader SESUDAH dipilih")
     f.add_argument("--trips", type=int, default=200)
     f.add_argument("--delays", type=int, nargs="+", default=[1, 3, 10, 25])
     f.add_argument("--stake", type=float, default=0.25)
     f.add_argument("--txs", type=int, default=3000, help="maksimal transaksi baru yang diambil per leader")
+    f.add_argument("--loop", type=float, default=0, help="ulang tiap N jam (0 = sekali)")
+    sub.add_parser("fwdreport", help="riwayat hasil forward test per gaya pegang")
     args = ap.parse_args()
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     if args.cmd == "backtest":
         backtest(args.entry)
-    elif args.cmd == "report":
+    elif args.cmd in ("report", "fwdreport"):
         db = open_lab()
-        report(db)
+        (report if args.cmd == "report" else fwd_report)(db)
         db.close()
     else:
         asyncio.run(main_async(args))

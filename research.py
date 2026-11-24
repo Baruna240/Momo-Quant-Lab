@@ -1,11 +1,13 @@
 """Research Engine (Fase 5): uji hipotesis strategi dengan validasi bertahap, tanpa memilih berdasarkan win rate.
 
-Jalankan: python research.py              (uji semua hipotesis altcoin H5-H8, simpan ke research.db, cetak laporan)
+Jalankan: python research.py              (uji semua hipotesis altcoin H5-H10, simpan ke research.db, cetak laporan)
           python research.py --report     (laporan hasil terakhir)
 
 Hipotesis altcoin (data alt_history.db, 35 koin sejak 2022):
   H5 Breakout + Retest (4 jam)        H6 Trend following multi-timeframe (4 jam + harian)
   H7 VWAP + Relative Volume (1 jam)   H8 Adaptif terhadap regime pasar BTC (4 jam)
+  H9 Rotasi momentum mingguan (harian: pegang 5 koin terkuat, ganti tiap Senin)
+  H10 Keranjang 10 koin besar + filter regime BTC (harian)
 Hipotesis meme (H1-H4) diuji di modul masing-masing; statusnya ikut dilaporkan di sini.
 
 Aturan main (semua tanpa melihat masa depan):
@@ -171,6 +173,88 @@ def h8_regime(d, ctx, p):
     return out
 
 
+def _weekly_picks(env, p):
+    """H9: tiap Senin (candle harian selesai), urutkan semua koin menurut kenaikan L hari terakhir, ambil SLOTS teratas.
+    abs: hanya koin yang kenaikannya positif. regime: kosongkan pilihan saat BTC di bawah EMA200 harian."""
+    key = ("h9", p["L"], p["abs"], p["regime"])
+    cache = env.setdefault("_cache", {})
+    if key in cache:
+        return cache[key]
+    data = env["data"]["1d"]
+    idx = {b: {float(x): i for i, x in enumerate(d["t"])} for b, d in data.items()}
+    days = sorted({t for m in idx.values() for t in m})
+    btc, bidx = data["BTC"], idx["BTC"]
+    e200 = ind.ema(btc["c"], 200)
+    picks = []
+    for t in days:
+        if datetime.fromtimestamp(t, timezone.utc).weekday() != 0:
+            continue
+        if p["regime"]:
+            j = bidx.get(t)
+            if j is None or not btc["c"][j] > e200[j]:
+                picks.append((t, set()))
+                continue
+        score = []
+        for b, d in data.items():
+            i = idx[b].get(t)
+            if i is None or i < p["L"]:
+                continue
+            r = d["c"][i] / d["c"][i - p["L"]] - 1
+            if not p["abs"] or r > 0:
+                score.append((r, b))
+        picks.append((t, {b for _, b in sorted(score, reverse=True)[:SLOTS]}))
+    cache[key] = picks
+    return picks
+
+
+def h9_momentum_rotation(d, ctx, p):
+    o, c, n, cost, delay = d["o"], d["c"], len(d["c"]), ctx["cost"], ctx.get("delay", 0)
+    pos = {float(x): i for i, x in enumerate(d["t"])}
+    trades, start = [], None
+
+    def close(i_sig, why):
+        e, x = start + 1 + delay, i_sig + 1 + delay
+        if e >= n:
+            return
+        px = c[-1] if x >= n else o[x]
+        x = min(x, n - 1)
+        if x > e:
+            trades.append({"t_in": float(d["t"][e]), "t_out": float(d["t"][x]), "bars": int(x - e), "why": why, "tag": "rotasi",
+                           "ret": float(px * (1 - cost) / (o[e] * (1 + cost)) - 1)})
+
+    for t, chosen in _weekly_picks(ctx["env"], p):
+        i = pos.get(t)
+        if i is None:
+            continue
+        if ctx["coin"] in chosen and start is None:
+            start = i
+        elif ctx["coin"] not in chosen and start is not None:
+            close(i, "keluar peringkat")
+            start = None
+    if start is not None:
+        close(n, "akhir data")
+    return trades
+
+
+def h10_basket_regime(d, ctx, p):
+    """Pegang 10 koin terbesar (peringkat hari ini) hanya saat BTC di atas EMA(N) harian; own: koin itu sendiri juga di
+    atas EMA(N)-nya. Masuk/keluar di harga buka hari berikutnya, tanpa stop (risiko diatur oleh filter regime)."""
+    if ctx["coin"] not in ctx["env"]["big"]:
+        return []
+    cache = ctx["env"].setdefault("_cache", {})
+    if ("btc_on", p["N"]) not in cache:
+        btc = ctx["env"]["data"]["1d"]["BTC"]
+        e = ind.ema(btc["c"], p["N"])
+        cache[("btc_on", p["N"])] = {float(t): bool(x == x and cl > x) for t, cl, x in zip(btc["t"], btc["c"], e)}
+    on = cache[("btc_on", p["N"])]
+    sig = np.array([on.get(float(t), False) for t in d["t"]])
+    if p["own"]:
+        e = ind.ema(d["c"], p["N"])
+        sig &= ~np.isnan(e) & (d["c"] > np.nan_to_num(e, nan=np.inf))
+    entries = np.where(sig & ~np.r_[False, sig[:-1]])[0]
+    return simulate(d, entries, np.zeros(len(entries)), ctx["cost"], exit_sig=~sig, delay=ctx.get("delay", 0), tag="keranjang")
+
+
 def grid(**axes):
     keys = list(axes)
     combos = [{}]
@@ -185,6 +269,11 @@ HYPOTHESES = {
            "grid": grid(ma=[(20, 50), (50, 200)], adx=[0, 20], m=[3, 4])},
     "H7": {"name": "VWAP + Relative Volume", "tf": "1h", "fn": h7_vwap_rvol, "grid": grid(r=[1.5, 2.5], ema=[False, True], H=[12, 24])},
     "H8": {"name": "Adaptif regime BTC", "tf": "4h", "fn": h8_regime, "grid": grid(ma=[(20, 50), (50, 200)], rsi=[25, 30])},
+    # H9 & H10: frekuensi rendah (mingguan / harian) supaya biaya tidak memakan untung, berbeda dari H5-H8 yang gagal
+    "H9": {"name": "Rotasi momentum mingguan", "tf": "1d", "fn": h9_momentum_rotation,
+           "grid": grid(L=[28, 84], abs=[False, True], regime=[False, True])},
+    "H10": {"name": "Keranjang + filter regime BTC", "tf": "1d", "fn": h10_basket_regime, "slots": 10,
+            "grid": grid(N=[100, 200], own=[False, True])},
 }
 
 
@@ -201,14 +290,14 @@ def pf(rets):
     return (gw / gl) if gl else (math.inf if gw else None)
 
 
-def portfolio(trades, t0, t1):
-    """Ekuitas portofolio: maks SLOTS posisi bersamaan, tiap posisi 1/SLOTS ekuitas saat masuk. Hasil: return tahunan, max DD."""
+def portfolio(trades, t0, t1, slots=SLOTS):
+    """Ekuitas portofolio: maks `slots` posisi bersamaan, tiap posisi 1/slots ekuitas saat masuk. Hasil: return tahunan, max DD."""
     ev = sorted([(tr["t_in"], 1, k) for k, tr in enumerate(trades)] + [(tr["t_out"], 0, k) for k, tr in enumerate(trades)])
     eq, open_, curve = 1.0, {}, [1.0]
     for _, kind, k in ev:
         if kind == 1:
-            if len(open_) < SLOTS:
-                open_[k] = eq / SLOTS
+            if len(open_) < slots:
+                open_[k] = eq / slots
         elif k in open_:
             eq += open_.pop(k) * trades[k]["ret"]
             curve.append(eq)
@@ -220,12 +309,12 @@ def portfolio(trades, t0, t1):
     return {"total": eq - 1, "annual": (eq ** (1 / years) - 1) if eq > 0 else -1.0, "max_dd": dd}
 
 
-def summarize(trades, t0, t1):
+def summarize(trades, t0, t1, slots=SLOTS):
     rets = [tr["ret"] for tr in trades]
     if not rets:
         return {"n": 0}
     return {"n": len(rets), "win": sum(r > 0 for r in rets) / len(rets), "exp": stx.mean(rets), "pf": pf(rets),
-            "t": tstat(rets), **{"port_" + k: v for k, v in portfolio(trades, t0, t1).items()}}
+            "t": tstat(rets), **{"port_" + k: v for k, v in portfolio(trades, t0, t1, slots).items()}}
 
 
 def hodl(data, t0, t1, bases):
@@ -240,6 +329,9 @@ def hodl(data, t0, t1, bases):
     years = (t1 - t0) / (365 * 86400)
     tot = stx.mean(rets) if rets else None
     return None if tot is None else {"total": tot, "annual": (1 + tot) ** (1 / years) - 1 if tot > -1 else -1.0}
+
+
+_summarize = summarize
 
 
 def within(trades, t0, t1):
@@ -271,7 +363,7 @@ def build_context(hdb):
 def coin_ctx(env, b, tf, cost_mult=1.0, delay=0):
     d = env["data"][tf][b]
     cost = (FEE + (SLIP_BIG if b in env["big"] else SLIP_SMALL)) * cost_mult
-    ctx = {"cost": cost, "delay": delay}
+    ctx = {"cost": cost, "delay": delay, "coin": b, "env": env}
     if tf == "4h":
         dd = env["data"]["1d"].get(b)
         if dd is not None:
@@ -294,6 +386,8 @@ def run_hypothesis(env, key, ctx_cache, grid=None, trials=None):
     (bawaan: semua kisi bawaan; Challenger memakai buku catatan percobaan sepanjang masa)."""
     H = {**HYPOTHESES[key], "grid": grid or HYPOTHESES[key]["grid"]}
     tf, fn = H["tf"], H["fn"]
+    slots = H.get("slots", SLOTS)
+    summarize = lambda tr, t0, t1: _summarize(tr, t0, t1, slots)   # noqa: E731 (jumlah slot portofolio per hipotesis)
     bases = [b for b in env["bases"] if b in env["data"][tf]]
     t_start = min(env["data"][tf][b]["t"][0] for b in bases)
     t_end = max(env["data"][tf][b]["t"][-1] for b in bases)
@@ -345,7 +439,7 @@ def run_hypothesis(env, key, ctx_cache, grid=None, trials=None):
         eq = peak = 1.0
         worst = 0.0
         for r in rng.permutation(rets):
-            eq *= 1 + r / SLOTS
+            eq *= 1 + r / slots
             peak = max(peak, eq)
             worst = min(worst, eq / peak - 1)
         mc_dd.append(worst)
@@ -421,6 +515,8 @@ SPACE = {
     "H6": grid(ma=[(20, 50), (30, 100), (50, 200)], adx=[0, 20, 25], m=[2, 3, 4]),
     "H7": grid(r=[1.5, 2.0, 2.5, 3.0], ema=[False, True], H=[6, 12, 24]),
     "H8": grid(ma=[(10, 30), (20, 50), (30, 100), (50, 200)], rsi=[20, 25, 30, 35]),
+    "H9": grid(L=[14, 28, 56, 84, 126], abs=[False, True], regime=[False, True]),
+    "H10": grid(N=[50, 100, 150, 200], own=[False, True]),
 }
 
 

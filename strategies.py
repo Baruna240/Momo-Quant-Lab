@@ -11,6 +11,7 @@ ENTRY_FIELDS = ("entry_delay_sec", "observe_sec", "filter_min_real_sol", "filter
                 "antirug_max_dev_sold")
 EXIT_FIELDS = ("stop_loss", "tp1_mult", "tp1_sell", "tp2_mult", "tp2_sell", "trailing_stop", "max_hold_min",
                "max_hold_after_tp_min", "stale_min")
+COST_FIELDS = ("extra_cost_pct",)
 
 # aturan jual moonbag: TP2 dimatikan (angka sangat tinggi), batas waktu setelah TP1 = 30 hari
 NO_TP2 = 1e9
@@ -45,13 +46,26 @@ VARIANTS = [
      {"observe_sec": 180, "filter_min_real_sol": 10, "filter_min_mult": 1.5, "filter_max_mult": 6.0, **MOONBAG}),
     ("momentum_moonbag", "filter", "Momentum + Anti-rug + Moonbag", "Momentum + Anti-rug; di 2x jual 30%, sisa 70% ditahan (trailing 40%, tanpa batas waktu)",
      {"observe_sec": 60, "filter_min_real_sol": 8, "filter_min_mult": 2.0, "filter_max_mult": 6.0, "antirug": True, **MOONBAG}),
+    # tiruan pengaturan bawaan "NEX SNIPER" (mode Balanced): masuk 5 dtk, TP +50% jual semua, SL -30%, jual paksa 30 mnt.
+    # Priority fee 0,005 SOL per transaksi pada snipe 0,1 SOL = 5% modal per sisi. Filter honeypot/sell tax/mint
+    # authority selalu lolos di pump.fun; "AI score" mereka tidak bisa ditiru, jadi tidak dipakai.
+    ("nex_sniper", "langsung", "NEX Sniper (tiruan)", "Masuk 5 dtk, TP +50%, SL −30%, jual paksa 30 mnt, priority fee 5%/sisi",
+     {"entry_delay_sec": 5, "stop_loss": 0.30, "tp1_mult": 1.5, "tp1_sell": 1.0, "tp2_mult": NO_TP2,
+      "max_hold_min": 30, "stale_min": 30, "extra_cost_pct": 0.05}),
+    # 2026-11-18, ide user: tidak harus masuk paling awal. Pantau koin sampai 15 menit; masuk saat market cap
+    # $15-20k DAN koin masih aktif (SOL riil masuk, harga naik dalam 30 dtk, >= 6 perubahan harga per menit).
+    # Modal 1 SOL, 0,1 SOL per entry (maks 10 posisi terbuka), jual SEMUA di 2x. EKSPERIMEN: belum lolos uji.
+    ("mcap_momentum", "mcap", "Momentum mcap 15-20k", "Masuk di mcap $15-20k selagi aktif, bukan dev serial, 0,1 SOL/entry (bank 1 SOL), jual semua di 2x, SL -35%",
+     {"mcap_min_usd": 15000, "mcap_max_usd": 20000, "filter_min_real_sol": 5, "min_moves_60s": 6, "watch_min": 15,
+      "stake_sol": 0.1, "max_open": 10, "max_creator_n24": 0, "stop_loss": 0.35, "tp1_mult": 2.0, "tp1_sell": 1.0, "tp2_mult": NO_TP2,
+      "max_hold_min": 60, "stale_min": 10}),
 ]
 
 
 @dataclass
 class Variant:
     name: str
-    mode: str          # "langsung" atau "filter"
+    mode: str          # "langsung", "filter" atau "mcap"
     label: str
     desc: str
     order: int         # urutan tetap -> warna tetap di dashboard
@@ -74,11 +88,27 @@ class Variant:
     max_hold_min: float
     max_hold_after_tp_min: float
     stale_min: float
+    extra_cost_pct: float = 0.0
+    # khusus mode "mcap": jendela market cap (USD), keramaian minimum, lama pantau, modal tetap per entry
+    mcap_min_usd: float = 0.0
+    mcap_max_usd: float = 0.0
+    min_moves_60s: int = 0
+    watch_min: float = 15.0
+    stake_sol: float = 0.0     # 0 = pakai modal per koin bawaan (per_coin_usd)
+    max_open: int = 0          # 0 = tanpa batas posisi terbuka bersamaan
+    max_creator_n24: int = -1  # lewati koin dari dev yang sudah membuat > N koin lain dalam 24 jam (-1 = mati)
 
 
 # varian yang sudah terbukti rugi berat: tidak dijalankan lagi (datanya tetap ada di database).
 # Bisa dihidupkan lagi dengan menyebutnya di STRATEGIES pada .env.
-RETIRED = {"langsung", "langsung_cl"}
+# 2026-11-04: semua varian rugi dengan t-stat -3,5 s/d -21. Tersisa "filter" (pembanding) + "nex_sniper" (sedang diuji).
+RETIRED = {"langsung", "langsung_cl", "filter_cepat", "filter_lambat", "momentum", "filter_sl_ketat", "filter_tp_tinggi",
+           "auto", "filter_antirug", "momentum_antirug", "lambat_moonbag", "momentum_moonbag",
+           # 2026-11-10: dua terakhir ikut dipensiunkan (filter -$497 / 2.404 posisi, nex_sniper -$803 / 4.205 posisi).
+           # Uji compounder "$20 challenge" (40% kas, maks 2 posisi, stop -8%, 2x jual separuh, trailing 10%) dengan
+           # sinyal varian-varian ini juga gagal: $20 -> ~$2,3 dari 4 titik mulai. Simulator tetap merekam token
+           # baru & aliran transaksi untuk Research Engine, tapi tidak membuka posisi.
+           "filter", "nex_sniper"}
 
 
 def build_variants(settings):
@@ -87,7 +117,7 @@ def build_variants(settings):
     for order, (name, mode, label, desc, overrides) in enumerate(VARIANTS):
         if (wanted and name not in wanted) or (not wanted and name in RETIRED):
             continue
-        base = {f: getattr(settings, f) for f in ENTRY_FIELDS + EXIT_FIELDS}
+        base = {f: getattr(settings, f) for f in ENTRY_FIELDS + EXIT_FIELDS + COST_FIELDS}
         base.update(overrides)
         out.append(Variant(name=name, mode=mode, label=label, desc=desc, order=order, **base))
     return out

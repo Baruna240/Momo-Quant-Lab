@@ -224,6 +224,12 @@ STRATEGIES = [
                 stop_atr=2.0, trail_atr=2.5, max_bars=12, market="futures", leverage=2),
 ]
 BY_NAME = {s.name: s for s in STRATEGIES}
+# 2026-11-04: terbukti rugi di backtest & live. Tidak membuka posisi baru; posisi yang masih terbuka tetap dikelola
+# sampai keluar normal (stop / trailing / sinyal keluar). Datanya tetap ada di altcoin.db.
+# 2026-11-10: sisanya juga rugi di backtest 117-133 hari (rsi_dip -1,3%, swing_4h -13%, fut_rsi_short -18,5%,
+# fut_ai -24,5%); untung kecil rsi_dip/fut_rsi_short di live hanya dari 12-18 posisi (kebetulan). Uji compounder $20
+# di 34 altcoin 2022-2026 (breakout/fomo/EMA) juga tidak lolos di kedua periode. Tersisa hodl_btc sebagai pembanding.
+RETIRED = {"trend_ema", "breakout", "fut_swing", "fut_breakdown", "rsi_dip", "swing_4h", "fut_rsi_short", "fut_ai"}
 
 
 # ================= pembukuan
@@ -398,7 +404,7 @@ class Engine:
             self.sell(book, pos, fill_price, ts, reason)
             if st.market != "futures":
                 return      # futures boleh langsung balik arah di candle yang sama
-        if len(book.pos) >= self.s.max_positions:
+        if st.name in RETIRED or len(book.pos) >= self.s.max_positions:
             return
         if st.market == "futures" and self.fut_ok is not None and symbol not in self.fut_ok:
             return
@@ -517,6 +523,8 @@ def backtest(s, coins, data_by_tf, fut_ok=None):
     slip_of = make_slip(s, coins)
     out = {}
     for st in STRATEGIES:
+        if st.name in RETIRED:
+            continue
         data = data_by_tf.get(st.tf, {})
         btc = data.get("BTCUSDT")
         if not btc:
