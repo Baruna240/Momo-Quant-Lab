@@ -64,28 +64,115 @@ button.buy { background: #15803d; } button.sell { background: #b91c1c; }
 button:disabled { opacity: .5; cursor: wait; }
 .msg { grid-column: span 2; min-height: 18px; color: var(--text-2); }
 .note { color: var(--muted); font-size: 10.5px; margin-top: 8px; }
-svg { display: block; width: 100%; height: 220px; }
+#chart svg { display: block; width: 100%; height: 220px; }
 .legend { display: flex; flex-wrap: wrap; gap: 4px 12px; color: var(--text-2); margin-top: 6px; }
 .legend span { display: inline-flex; align-items: center; gap: 5px; }
 .empty { color: var(--muted); padding: 14px 0; text-align: center; }
 .err { color: var(--red); }
+.pill { display: inline-block; padding: 0 6px; border-radius: 999px; font-size: 10px; font-weight: 700; letter-spacing: .04em; }
+.pill.ok { color: var(--green); background: rgba(34,197,94,.12); }
+.pill.no { color: var(--red); background: rgba(239,68,68,.12); }
+
+/* ---------- agent yang bekerja ---------- */
+.crew-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin-bottom: 10px; }
+.crew-head h2 { margin: 0; }
+.crew-state { display: inline-flex; align-items: center; gap: 6px; color: var(--text-2); }
+.crew { display: flex; align-items: stretch; gap: 0; overflow-x: auto; padding: 4px 2px 8px; }
+.crew-wrap { display: grid; grid-template-columns: minmax(0, 1fr) 290px; gap: 14px; }
+.feed-box { border-left: 1px solid var(--line); padding-left: 14px; min-width: 0; }
+@media (max-width: 1200px) { .crew-wrap { grid-template-columns: 1fr; } .feed-box { border-left: 0; padding-left: 0; border-top: 1px solid var(--line); padding-top: 10px; } }
+.agent { flex: 1 1 112px; min-width: 104px; max-width: 200px; background: var(--panel-2); border: 1px solid var(--line-2); border-radius: 10px;
+  padding: 12px 10px 10px; text-align: center; position: relative; transition: border-color .3s, opacity .3s; }
+.link { flex: 0 0 14px; align-self: center; height: 2px; position: relative; overflow: hidden;
+  background: repeating-linear-gradient(90deg, var(--line-2) 0 4px, transparent 4px 8px); }
+.crew.busy .link { background: repeating-linear-gradient(90deg, var(--cyan) 0 4px, transparent 4px 8px); background-size: 16px 2px;
+  animation: flow 0.6s linear infinite; }
+@keyframes flow { to { background-position: 16px 0; } }
+.av { width: 54px; height: 54px; margin: 0 auto 8px; position: relative; display: grid; place-items: center; }
+.av .ring { position: absolute; inset: 0; border-radius: 50%; border: 2px solid var(--line-2); }
+.av .emo { line-height: 0; position: relative; color: var(--text); }
+.av .emo svg { display: block; }
+.feed .fi { color: var(--text-2); padding-top: 1px; }
+.av .zz { position: absolute; right: -6px; top: -4px; color: var(--text-2); font-size: 11px; font-weight: 700; opacity: 0; }
+.agent .nm { font-weight: 700; font-size: 11.5px; letter-spacing: .02em; }
+.agent .stt { display: inline-flex; align-items: center; gap: 5px; margin: 4px 0 6px; font-size: 10px; letter-spacing: .12em;
+  color: var(--muted); text-transform: uppercase; }
+.agent .stt i { width: 6px; height: 6px; border-radius: 50%; background: var(--muted); }
+.agent .dt { color: var(--text-2); font-size: 10.5px; line-height: 1.35; min-height: 42px; }
+.agent .bar { height: 3px; border-radius: 2px; margin-top: 8px; background: var(--line); overflow: hidden; }
+.agent .bar b { display: block; height: 100%; width: 0; background: var(--cyan); }
+/* bekerja */
+.agent.bekerja { border-color: var(--cyan); box-shadow: 0 0 0 1px rgba(34,211,238,.25), 0 0 18px rgba(34,211,238,.12); }
+.agent.bekerja .ring { border-color: transparent; background: conic-gradient(var(--cyan), transparent 70%) border-box;
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 2px)); mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 2px));
+  animation: spin 1s linear infinite; }
+.agent.bekerja .emo { animation: bob .6s ease-in-out infinite alternate; }
+.agent.bekerja .stt { color: var(--cyan); }
+.agent.bekerja .stt i { background: var(--cyan); animation: blink .8s infinite; }
+.agent.bekerja .bar b { width: 40%; animation: scan 1.1s ease-in-out infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes bob { from { transform: translateY(1px) rotate(-4deg); } to { transform: translateY(-3px) rotate(4deg); } }
+@keyframes blink { 50% { opacity: .2; } }
+@keyframes scan { 0% { transform: translateX(-100%); } 100% { transform: translateX(250%); } }
+/* selesai */
+.agent.selesai .ring { border-color: rgba(34,197,94,.55); animation: breathe 3s ease-in-out infinite; }
+.agent.selesai .stt { color: var(--green); }
+.agent.selesai .stt i { background: var(--green); }
+.agent.selesai .bar b { width: 100%; background: var(--green); opacity: .5; }
+@keyframes breathe { 50% { box-shadow: 0 0 0 5px rgba(34,197,94,.08); } }
+/* tidur */
+.agent.tidur { opacity: .62; }
+.agent.tidur .emo { color: var(--muted); transform: rotate(-10deg); }
+.agent.bekerja .emo { color: var(--cyan); }
+.agent.selesai .emo { color: var(--green); }
+.agent.error .emo { color: var(--red); }
+.agent.tidur .zz { animation: zz 2.4s ease-in-out infinite; }
+.agent.tidur .stt { color: var(--text-2); }
+@keyframes zz { 0% { opacity: 0; transform: translate(0, 4px) scale(.8); } 30% { opacity: 1; } 100% { opacity: 0; transform: translate(8px, -14px) scale(1.2); } }
+/* error */
+.agent.error { border-color: var(--red); }
+.agent.error .emo { animation: shake .4s 3; }
+.agent.error .stt { color: var(--red); }
+.agent.error .stt i { background: var(--red); }
+@keyframes shake { 25% { transform: translateX(-3px); } 75% { transform: translateX(3px); } }
+.feed { list-style: none; margin: 0; padding: 0; max-height: 236px; overflow-y: auto; }
+.feed li { display: grid; grid-template-columns: 44px 22px 1fr; gap: 6px; padding: 5px 2px; border-bottom: 1px solid var(--line); align-items: start; }
+.feed li.new { animation: slidein .5s ease-out; background: rgba(34,211,238,.06); }
+.feed .t { color: var(--muted); }
+@keyframes slidein { from { opacity: 0; transform: translateY(-6px); } }
+@media (max-width: 700px) { .crew { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; } .link { display: none; } .agent { max-width: none; } }
 </style>
 </head>
 <body>
+<script src="/nav.js"></script>
 <div class="wrap">
   <div class="top">
     <div class="logo">ID</div>
     <div class="brand"><b>SAHAM BEI</b><div>PAPER TRADING · DATA YAHOO (TERTUNDA)</div></div>
-    <span class="badge" id="mode">PAPER</span>
     <span class="chip"><span class="dot" id="mdot"></span><span id="mtxt">—</span></span>
     <span class="chip" id="ihsg" title="Strategi _ihsg dan _fund hanya membeli saat IHSG di atas EMA50">IHSG —</span>
     <div class="grow"></div>
     <span class="clock" id="clock">--:--:--</span><span class="mut">WIB</span>
-    <a class="chip" href="/">← MEMECOIN</a>
-    <a class="chip" href="/alt">ALTCOIN</a>
   </div>
 
   <div class="grid">
+    <div class="panel c12">
+      <div class="crew-wrap">
+        <div style="min-width:0">
+          <div class="crew-head">
+            <h2>AGENT YANG BEKERJA</h2>
+            <span class="crew-state" id="crew-state">memuat…</span>
+          </div>
+          <div class="crew" id="crew"></div>
+          <div class="note">Urutan kerja setiap putaran: berita IPO → fundamental → harga → tren IHSG → risiko (stop loss) → sinyal teknikal → order simulasi. Di luar jam bursa para agent istirahat.</div>
+        </div>
+        <div class="feed-box">
+          <h2>LOG AKTIVITAS AGENT</h2>
+          <ul class="feed" id="feed"><li class="empty">Belum ada aktivitas.</li></ul>
+        </div>
+      </div>
+    </div>
+
     <div class="c12 grid" id="books" style="gap:10px"></div>
 
     <div class="panel c8">
@@ -205,7 +292,6 @@ function renderChart(d) {
 function render(d) {
   $("mdot").className = "dot" + (d.market_open ? " on" : "");
   $("mtxt").innerHTML = d.market_open ? "<b>BURSA BUKA</b>" : "BURSA TUTUP";
-  $("mode").textContent = d.broker === "live" ? "LIVE" : "PAPER";
   $("feenote").innerHTML = `Fee beli ${(d.fee_buy * 100).toFixed(2)}% · jual ${(d.fee_sell * 100).toFixed(2)}% · slippage 1 tick · batas ARA/ARB.
     ${d.market_open || d.manual_anytime ? "" : "<br><span class='err'>Bursa tutup: order ditolak (set SAHAM_MANUAL_ANYTIME=1 untuk mencoba).</span>"}`;
   renderBooks(d);
@@ -218,7 +304,7 @@ function render(d) {
   }).join("") : `<tr><td colspan="9" class="empty">Tidak ada posisi.</td></tr>`;
   $("quotes").innerHTML = d.quotes.length ? d.quotes.map(q => {
     const r = q.prev_close ? (q.last / q.prev_close - 1) * 100 : null;
-    const f = q.fund_ok == null ? `<span class="mut">—</span>` : `<span class="${q.fund_ok ? "up" : "dn"}">${q.fund_ok ? "✓" : "✗"}</span> <span class="mut">${esc(q.fund_ok ? "" : q.fund_why)}</span>`;
+    const f = q.fund_ok == null ? `<span class="mut">—</span>` : `<span class="pill ${q.fund_ok ? "ok" : "no"}">${q.fund_ok ? "Lolos" : "Tidak"}</span> <span class="mut">${esc(q.fund_ok ? "" : q.fund_why)}</span>`;
     return `<tr><td title="${esc(q.name)}"><b>${esc(q.symbol)}</b></td><td>${num(q.last)}</td><td class="${cls(r)}">${pct(r)}</td>
       <td>${q.roe == null ? "—" : (q.roe * 100).toFixed(0) + "%"}</td><td>${q.pe == null ? "—" : q.pe.toFixed(1)}</td><td class="l">${f}</td></tr>`;
   }).join("") : `<tr><td colspan="6" class="empty">Belum ada harga.</td></tr>`;
@@ -282,6 +368,83 @@ $("order").addEventListener("submit", async ev => {
 
 load();
 setInterval(load, 30000);
+
+// ---------------------------------------------------------------- agent yang bekerja
+// ikon garis 24x24 (gaya sama dengan bar navigasi), tanpa emoji
+const AG_ICON = {
+  ipo: '<rect x="3.5" y="4" width="13" height="16" rx="1.6"/><path d="M16.5 8h3.2v10a2 2 0 0 1-2 2H6"/><path d="M7 8.5h6M7 12h6M7 15.5h3.5"/>',
+  fundamental: '<path d="M13.5 3H6.2A1.7 1.7 0 0 0 4.5 4.7v14.6A1.7 1.7 0 0 0 6.2 21H10"/><path d="M13.5 3 18 7.5V10"/><path d="M8 8.5h4M8 12h3"/><circle cx="15.5" cy="15.5" r="3.6"/><path d="m18.2 18.2 2.6 2.6"/>',
+  pemantau: '<path d="M5.2 18.8a9.6 9.6 0 0 1 0-13.6M18.8 5.2a9.6 9.6 0 0 1 0 13.6M8.6 15.4a4.8 4.8 0 0 1 0-6.8M15.4 8.6a4.8 4.8 0 0 1 0 6.8"/><circle cx="12" cy="12" r="1.5"/>',
+  ihsg: '<circle cx="12" cy="12" r="8.8"/><path d="m15.6 8.4-2.1 5.1-5.1 2.1 2.1-5.1z"/>',
+  risiko: '<path d="M12 3.2 5 6.1v5.6c0 4.2 2.9 7.7 7 9.1 4.1-1.4 7-4.9 7-9.1V6.1z"/><path d="m9.2 12.1 2 2 3.8-4"/>',
+  teknikal: '<path d="M4 4v16h16"/><path d="m7.5 14.5 3.5-3.6 2.8 2.7 5.2-5.6"/><path d="M15.5 8h3.5v3.5"/>',
+  eksekutor: '<path d="M20.5 3.5 10 14"/><path d="M20.5 3.5 14 20.5l-4-6.5-6.5-4z"/>'
+};
+const icon = (id, size) => `<svg viewBox="0 0 24 24" width="${size}" height="${size}" style="width:${size}px;height:${size}px" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${AG_ICON[id] || '<circle cx="12" cy="12" r="3"/>'}</svg>`;
+const AGENTS = [
+  ["ipo", "Pemburu IPO"], ["fundamental", "Analis Fundamental"], ["pemantau", "Pemantau Harga"],
+  ["ihsg", "Penjaga Tren IHSG"], ["risiko", "Manajer Risiko"], ["teknikal", "Analis Teknikal"], ["eksekutor", "Eksekutor Order"]];
+const STATUS_TXT = {bekerja: "bekerja", selesai: "selesai", tidur: "istirahat", error: "error"};
+let lastLogTs = 0, nextRun = null;
+$("crew").innerHTML = AGENTS.map(([id, name], i) => (i ? `<div class="link"></div>` : "") + `
+  <div class="agent tidur" id="ag-${id}">
+    <div class="av"><span class="ring"></span><span class="emo">${icon(id, 24)}</span><span class="zz">z<sup>z</sup></span></div>
+    <div class="nm">${name}</div>
+    <div class="stt"><i></i><span>menunggu</span></div>
+    <div class="dt">Belum ada data. Jalankan python saham.py</div>
+    <div class="bar"><b></b></div>
+  </div>`).join("");
+
+function ago(ts) {
+  const s = Math.max(0, Math.round(Date.now() / 1000 - ts));
+  return s < 60 ? `${s} dtk lalu` : s < 3600 ? `${Math.round(s / 60)} mnt lalu` : `${Math.round(s / 3600)} jam lalu`;
+}
+
+function renderAgents(a) {
+  let busy = false;
+  for (const [id] of AGENTS) {
+    const g = a.agents[id], box = $("ag-" + id);
+    if (!g) continue;
+    // status "bekerja" yang tidak diperbarui > 3 menit berarti simulator berhenti di tengah jalan
+    const st = g.status === "bekerja" && a.now - g.ts > 180 ? "error" : g.status;
+    busy ||= st === "bekerja";
+    box.className = "agent " + st;
+    box.querySelector(".stt span").textContent = (STATUS_TXT[st] || st) + " · " + ago(g.ts);
+    box.querySelector(".dt").textContent = st === "error" && g.status === "bekerja" ? "Tidak ada kabar > 3 menit: simulator mungkin berhenti" : g.detail;
+  }
+  $("crew").classList.toggle("busy", busy);
+  nextRun = a.next_run;
+  const stale = !Object.keys(a.agents).length || (!busy && nextRun && a.now - nextRun > 600);
+  $("crew-state").innerHTML = stale ? `<span class="dot"></span><span class="err">simulator tidak berjalan · jalankan python saham.py</span>`
+    : busy ? `<span class="dot on"></span><b>sedang bekerja…</b>` : `<span class="dot"></span><span id="countdown"></span>`;
+  tickCountdown();
+  const fresh = a.log.filter(l => l.ts > lastLogTs);
+  if (a.log.length) {
+    $("feed").innerHTML = a.log.map(l => `<li class="${lastLogTs && l.ts > lastLogTs ? "new" : ""}">
+      <span class="t">${new Date(l.ts * 1000).toLocaleTimeString("id-ID", {timeZone: "Asia/Jakarta", hour: "2-digit", minute: "2-digit"})}</span>
+      <span class="fi">${icon(l.agent, 14)}</span><span>${esc(l.msg)}</span></li>`).join("");
+    if (fresh.length && lastLogTs) load();          // ada order baru: segarkan angka di halaman
+    lastLogTs = Math.max(lastLogTs, ...a.log.map(l => l.ts));
+  }
+}
+
+function tickCountdown() {
+  const c = document.getElementById("countdown");
+  if (!c || !nextRun) return;
+  const s = Math.max(0, Math.round(nextRun - Date.now() / 1000));
+  const t = s >= 3600 ? `${Math.floor(s / 3600)} jam ${Math.floor(s % 3600 / 60)} mnt` : `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
+  c.textContent = s ? `putaran berikutnya dalam ${t}` : "memulai putaran…";
+}
+setInterval(tickCountdown, 1000);
+
+async function loadAgents() {
+  try {
+    const a = await (await fetch("/api/saham/agents")).json();
+    if (!a.error) renderAgents(a);
+  } catch (e) { /* dashboard sedang restart: coba lagi 5 detik lagi */ }
+}
+loadAgents();
+setInterval(loadAgents, 5000);
 </script>
 </body>
 </html>

@@ -183,6 +183,7 @@ body[data-mode="alt"] [data-only="meme"], body[data-mode="meme"] [data-only="alt
 </style>
 </head>
 <body>
+<script src="/nav.js"></script>
 <div class="beam"></div>
 <div class="wrap">
   <header>
@@ -191,7 +192,6 @@ body[data-mode="alt"] [data-only="meme"], body[data-mode="meme"] [data-only="alt
         <path d="M13 3 L23 21 H3 Z" fill="none" stroke="url(#pg)" stroke-width="2" stroke-linejoin="round"/><path d="M1 14 H10" stroke="#ecebf3" stroke-width="1.5"/></svg>
       <span>momo prism</span><small>konsol riset quant</small>
     </div>
-    <nav class="mk" aria-label="Pasar"><a href="/prism" id="mk-meme">Meme coin</a><a href="/prism-alt" id="mk-alt">Altcoin</a><a href="/copy">Copy trade</a></nav>
     <nav class="tabs" aria-label="Bagian" data-only="meme">
       <a href="#ringkasan">Ringkasan</a><a href="#meme">Leaderboard</a><a href="#flow">Aliran &amp; Safety</a><a href="#biaya">Biaya &amp; risiko</a>
     </nav>
@@ -201,7 +201,6 @@ body[data-mode="alt"] [data-only="meme"], body[data-mode="meme"] [data-only="alt
     <div class="right">
       <span class="dot"><i id="d-meme"></i>meme</span>
       <span class="dot"><i id="d-alt"></i>altcoin</span>
-      <span class="themes" title="Ganti tema tampilan (data sama)"><span>TEMA</span><a href="/" id="th-term">TERMINAL</a><a href="/lab" id="th-abyss">ABYSS</a><a href="/prism" id="th-prism" class="on">PRISM</a></span>
       <span class="clock" id="clock"></span>
     </div>
   </header>
@@ -350,9 +349,7 @@ let D = null, colorOf = {}, selected = new Set(), sortState = { meme: ["expectan
 // satu file untuk dua halaman: /prism (meme coin) dan /prism-alt (altcoin)
 const MODE = location.pathname.startsWith("/prism-alt") ? "alt" : "meme";
 document.body.dataset.mode = MODE;
-$("mk-" + MODE).classList.add("on");
 if (MODE === "alt") {
-  $("th-term").href = "/alt"; $("th-abyss").href = "/alt-abyss"; $("th-prism").href = "/prism-alt";
   document.title = "Momo Prism · Altcoin";
 }
 
