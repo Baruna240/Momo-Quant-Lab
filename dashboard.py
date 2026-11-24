@@ -497,6 +497,27 @@ def saham_summary():
     return _clean(out)
 
 
+def saham_agents():
+    """Status agent simulator saham + log aktivitas terakhir (untuk animasi di /saham, dibaca tiap 5 detik)."""
+    from saham_broker import SAHAM_DB, market_open
+    out = {"now": time.time(), "market_open": market_open(), "agents": {}, "log": [], "next_run": None}
+    conn = _ro(SAHAM_DB)
+    if not conn:
+        return out
+    try:
+        if not has_table(conn, "agents"):
+            return out
+        for r in conn.execute("SELECT * FROM agents"):
+            if r["name"] == "_loop":
+                out["next_run"] = r["ts"]
+            else:
+                out["agents"][r["name"]] = {"status": r["status"], "detail": r["detail"], "ts": r["ts"]}
+        out["log"] = [dict(r) for r in conn.execute("SELECT ts, agent, msg FROM agent_log ORDER BY id DESC LIMIT 40")]
+    finally:
+        conn.close()
+    return out
+
+
 def saham_order(body):
     """Order manual dari halaman web, selalu ke buku 'manual' lewat broker yang sama dengan CLI."""
     from saham import manual_order
@@ -754,8 +775,12 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send(COPY_PAGE.read_bytes(), "text/html; charset=utf-8")
             if url.path == "/api/copy":
                 return self.send(copy_summary())
+            if url.path == "/nav.js":
+                return self.send((BASE_DIR / "web" / "nav.js").read_bytes(), "text/javascript; charset=utf-8")
             if url.path in ("/saham", "/saham.html"):
                 return self.send(SAHAM_PAGE.read_bytes(), "text/html; charset=utf-8")
+            if url.path == "/api/saham/agents":
+                return self.send(saham_agents())
             if url.path == "/api/saham/summary":
                 return self.send(saham_summary())
             conn = db()

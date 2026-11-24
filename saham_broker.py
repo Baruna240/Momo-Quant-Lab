@@ -102,6 +102,21 @@ def market_open(now=None):
     return 9 * 60 <= hm < s1_end or s2_start <= hm < 15 * 60 + 50
 
 
+def next_open(now=None):
+    """Waktu (datetime WIB) sesi bursa berikutnya dimulai; hari libur bursa tidak diperhitungkan."""
+    now = (now or datetime.now(WIB)).astimezone(WIB).replace(second=0, microsecond=0)
+    for add in range(0, 8):
+        day = (now + timedelta(days=add)).replace(hour=0, minute=0)
+        if day.weekday() >= 5:
+            continue
+        s2 = (14, 0) if day.weekday() == 4 else (13, 30)
+        for h, m in ((9, 0), s2):
+            t = day.replace(hour=h, minute=m)
+            if t > now:
+                return t
+    return now
+
+
 def fmt_idr(x):
     return f"Rp{x:,.0f}".replace(",", ".")
 
@@ -123,6 +138,8 @@ CREATE TABLE IF NOT EXISTS fundamentals (symbol TEXT PRIMARY KEY, ts REAL, roe R
     earn_growth REAL, rev_growth REAL, der REAL, div_yield REAL, margin REAL);
 CREATE TABLE IF NOT EXISTS ipo (symbol TEXT PRIMARY KEY, title TEXT, url TEXT, source TEXT, first_seen REAL,
     status TEXT DEFAULT 'pipeline', listing_date TEXT, checked REAL DEFAULT 0, note TEXT);
+CREATE TABLE IF NOT EXISTS agents (name TEXT PRIMARY KEY, status TEXT, detail TEXT, ts REAL);
+CREATE TABLE IF NOT EXISTS agent_log (id INTEGER PRIMARY KEY AUTOINCREMENT, ts REAL, agent TEXT, msg TEXT);
 CREATE INDEX IF NOT EXISTS trades_book ON trades(book, ts);
 CREATE INDEX IF NOT EXISTS equity_book ON equity(book, ts);
 """

@@ -25,7 +25,7 @@ import numpy as np
 
 import indicators as ind
 import saham_ipo
-from saham_broker import (LOT, WIB, Order, fmt_idr, get_broker, load_saham_settings, market_open, price_band,
+from saham_broker import (LOT, WIB, Order, fmt_idr, get_broker, load_saham_settings, market_open, next_open, price_band,
                           round_tick, saham_connect, tick_size)
 
 YAHOO = "https://query1.finance.yahoo.com/v8/finance/chart/"
@@ -34,6 +34,14 @@ BENCH = "^JKSE"     # IHSG
 WARMUP = 200
 EQUITY_EVERY = 900  # simpan titik equity paling sering tiap 15 menit
 FUND_EVERY = 20 * 3600
+IPO_LABEL = {"pipeline": "belum listing", "listed": "sudah listing", "entered": "sudah dibeli"}
+
+
+HARI = ["Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu", "Minggu"]
+
+
+def fmt_when(t):
+    return f"{HARI[t.weekday()]} {t:%H:%M} WIB"
 
 
 def log(msg):
@@ -332,6 +340,17 @@ class SahamSim:
         self.conn.commit()
         return data
 
+    def agent(self, name, status, detail=None, note=None):
+        """Status agent untuk animasi di halaman /saham. note = kejadian penting yang dicatat ke log aktivitas."""
+        row = self.conn.execute("SELECT detail FROM agents WHERE name=?", (name,)).fetchone()
+        if detail is None:
+            detail = row["detail"] if row else ""
+        self.conn.execute("INSERT OR REPLACE INTO agents VALUES (?,?,?,?)", (name, status, detail, time.time()))
+        if note or (status == "selesai" and (not row or row["detail"] != detail)):
+            self.conn.execute("INSERT INTO agent_log (ts, agent, msg) VALUES (?,?,?)", (time.time(), name, note or detail))
+            self.conn.execute("DELETE FROM agent_log WHERE id < (SELECT MAX(id) - 300 FROM agent_log)")
+        self.conn.commit()
+
     def was_acted(self, book, sym, bar_date, kind):
         return self.conn.execute("SELECT 1 FROM signals WHERE book=? AND symbol=? AND bar_date=? AND kind=?",
                                  (book, sym, bar_date, kind)).fetchone() is not None
@@ -359,11 +378,21 @@ class SahamSim:
         log(f"fundamental diperbarui untuk {len(rows)} saham")
 
     def step(self):
+        is_open = market_open()
+        self.agent("ipo", "bekerja", "Membaca berita IPO dan mengecek listing baru")
         saham_ipo.scan(self.conn, self.client, log)
         saham_ipo.check_listing(self.conn, self.client, fetch_daily, log)
+        ipo = self.conn.execute("SELECT symbol, status FROM ipo WHERE status IN ('pipeline','listed','entered')").fetchall()
+        self.agent("ipo", "selesai", (f"{len(ipo)} kandidat: " + ", ".join(f"{r['symbol']} ({IPO_LABEL.get(r['status'], r['status'])})"
+                                                                         for r in ipo[:4])) if ipo else "Belum ada IPO baru di berita")
+        self.agent("fundamental", "bekerja", "Membaca laporan keuangan (ROE, PER, laba, utang)")
         self.refresh_fundamentals()
+        funds = [dict(r) for r in self.conn.execute("SELECT * FROM fundamentals")]
+        self.agent("fundamental", "selesai", f"{sum(quality_ok(f)[0] for f in funds)}/{len(funds)} saham lolos filter kualitas")
+        self.agent("pemantau", "bekerja", f"Mengambil harga {len(self.symbols)} saham + IHSG")
         data = self.fetch_all(extra=saham_ipo.active_symbols(self.conn))
-        is_open = market_open()
+        self.agent("pemantau", "selesai", f"{len(data)} harga diperbarui pukul {datetime.now(WIB):%H:%M} WIB")
+        self.agent("ihsg", "bekerja", "Mengecek arah IHSG terhadap EMA50")
         try:
             bench = fetch_daily(self.client, BENCH, "1y")
             up = ihsg_up(bench, completed_bars(bench))
@@ -371,9 +400,18 @@ class SahamSim:
             self.conn.execute("INSERT OR REPLACE INTO quotes VALUES (?,?,?,?,?)",
                               ("IHSG", bench.last, bench.prev_close, time.time(), "naik" if self.ihsg_ok else "turun"))
             self.conn.commit()
+            self.agent("ihsg", "selesai", f"IHSG {bench.last:,.0f} " + ("di atas EMA50: strategi _ihsg boleh membeli" if self.ihsg_ok
+                                                                       else "di bawah EMA50: strategi _ihsg menahan beli"))
         except Exception as e:
             log(f"gagal ambil IHSG: {e}; strategi _ihsg tidak membeli dulu")
             self.ihsg_ok = False
+            self.agent("ihsg", "error", "Gagal mengambil IHSG: strategi _ihsg menahan beli")
+        n_pos = self.conn.execute("SELECT COUNT(*) FROM positions").fetchone()[0]
+        self.agent("risiko", "bekerja", f"Mengecek stop loss {n_pos} posisi")
+        self.agent("teknikal", "bekerja", f"Memindai sinyal {len(STRATEGIES)} strategi x {len(self.symbols)} saham")
+        if is_open:
+            self.agent("eksekutor", "bekerja", "Siap mengirim order simulasi")
+        stats = {"sell": 0, "buy": 0, "signal": 0}
         funds = {r["symbol"]: dict(r) for r in self.conn.execute("SELECT * FROM fundamentals")}
         for st in STRATEGIES:
             br = self.brokers[st.name]
@@ -400,7 +438,10 @@ class SahamSim:
                 f = br.place(Order(sym, "SELL", p["lots"], reason=why), {"last": d.last, "prev_close": d.prev_close})
                 if f.ok:
                     self.mark_acted(st.name, sym, d.dates[k], "SELL")
+                    stats["sell"] += 1
                 log(f"[{st.name}] {f.msg}  ({why})  PnL {fmt_idr(f.pnl)}")
+                self.agent("risiko" if why == "stop loss" else "eksekutor", "bekerja",
+                           note=f"[{st.name}] {f.msg} ({why})" + (f", P/L {fmt_idr(f.pnl)}" if f.ok else ""))
             if not is_open or (st.regime and not self.ihsg_ok):
                 continue
             held_syms = br.positions()
@@ -415,11 +456,13 @@ class SahamSim:
                 k = n - 1
                 if not st.entry(di, k) or self.was_acted(st.name, sym, d.dates[k], "BUY"):
                     continue
+                stats["signal"] += 1
                 if st.fund:
                     ok, why = quality_ok(funds.get(sym))
                     if not ok:
                         self.mark_acted(st.name, sym, d.dates[k], "BUY")
                         log(f"[{st.name}] sinyal {sym} ditolak filter fundamental: {why}")
+                        self.agent("fundamental", "selesai", note=f"[{st.name}] menolak {sym}: {why}")
                         continue
                 equity = self.equity(st.name, data)
                 lots = lots_for(min(equity / self.s.max_positions, br.cash()), d.last, self.s.fee_buy)
@@ -434,8 +477,19 @@ class SahamSim:
                                       (f.price - st.stop_atr * di.atr[k], st.name, sym))
                     self.conn.commit()
                     held_syms = br.positions()
+                    stats["buy"] += 1
                 log(f"[{st.name}] {f.msg}")
+                self.agent("eksekutor", "bekerja", note=f"[{st.name}] {f.msg}")
         saham_ipo.manage(self.conn, self.brokers[saham_ipo.BOOK], data, is_open, self.s, log)
+        n_pos = self.conn.execute("SELECT COUNT(*) FROM positions").fetchone()[0]
+        self.agent("risiko", "selesai", f"Menjaga {n_pos} posisi" + (f", {stats['sell']} dijual" if stats["sell"] else ""))
+        if is_open:
+            self.agent("teknikal", "selesai", f"{stats['signal']} sinyal beli baru" if stats["signal"] else "Tidak ada sinyal beli baru")
+            self.agent("eksekutor", "selesai", f"{stats['buy']} beli, {stats['sell']} jual di putaran ini"
+                       if stats["buy"] or stats["sell"] else "Tidak ada order di putaran ini")
+        else:
+            self.agent("teknikal", "selesai", "Bursa tutup: sinyal dieksekusi saat bursa buka")
+            self.agent("eksekutor", "selesai", f"Bursa tutup, buka lagi {fmt_when(next_open())}")
         self.snapshot(data)
         return is_open
 
@@ -478,8 +532,15 @@ class SahamSim:
                 is_open = self.step()
             except Exception as e:
                 log(f"error putaran: {type(e).__name__}: {e}")
+                self.agent("pemantau", "error", f"Putaran gagal: {type(e).__name__}")
                 is_open = False
-            time.sleep(self.s.poll_sec if is_open else 1800)
+            wait = self.s.poll_sec if is_open else min(1800, max(60, (next_open() - datetime.now(WIB)).total_seconds()))
+            if not is_open:     # di luar jam bursa semua agent istirahat sampai putaran berikutnya
+                self.conn.execute("UPDATE agents SET status='tidur' WHERE status != 'error'")
+            self.conn.execute("INSERT OR REPLACE INTO agents VALUES ('_loop', ?, '', ?)",
+                              ("buka" if is_open else "tutup", time.time() + wait))
+            self.conn.commit()
+            time.sleep(wait)
 
 
 def print_backtest(res, s):
