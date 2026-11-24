@@ -489,5 +489,79 @@ class AgentTest(unittest.TestCase):
         self.assertGreater(research.t_needed(100), research.t_needed(28))
 
 
+class SahamTest(unittest.TestCase):
+    def setUp(self):
+        import saham_broker as sb
+        self.sb = sb
+        self.tmp = tempfile.TemporaryDirectory()
+        self.conn = sb.saham_connect(Path(self.tmp.name) / "s.db")
+        self.s = sb.SahamSettings(budget_idr=10_000_000)
+
+    def tearDown(self):
+        self.conn.close()
+        self.tmp.cleanup()
+
+    def test_tick_and_band(self):
+        sb = self.sb
+        self.assertEqual([sb.tick_size(p) for p in (150, 300, 1500, 3000, 9000)], [1, 2, 5, 10, 25])
+        self.assertEqual(sb.round_tick(9010), 9000)
+        self.assertEqual(sb.round_tick(9010, up=True), 9025)
+        self.assertEqual(sb.price_band(10000), (8000, 12000))   # >5.000: 20%
+        self.assertEqual(sb.price_band(1000), (750, 1250))      # 200-5.000: 25%
+
+    def test_market_hours(self):
+        from datetime import datetime
+        wib = self.sb.WIB
+        self.assertTrue(self.sb.market_open(datetime(2026, 11, 24, 10, 0, tzinfo=wib)))       # Selasa sesi 1
+        self.assertFalse(self.sb.market_open(datetime(2026, 11, 24, 12, 30, tzinfo=wib)))     # istirahat
+        self.assertFalse(self.sb.market_open(datetime(2026, 11, 27, 13, 45, tzinfo=wib)))     # Jumat sesi 2 mulai 14:00
+        self.assertFalse(self.sb.market_open(datetime(2026, 11, 28, 10, 0, tzinfo=wib)))      # Sabtu
+
+    def test_paper_round_trip(self):
+        sb = self.sb
+        br = sb.PaperBroker(self.conn, "t", self.s)
+        f = br.place(sb.Order("BBCA", "BUY", 2), {"last": 9000, "prev_close": 9000})
+        self.assertTrue(f.ok)
+        self.assertEqual(f.price, 9025)                          # 1 tick slippage
+        buy_cost = 9025 * 200 * (1 + self.s.fee_buy)
+        self.assertAlmostEqual(br.cash(), 10_000_000 - buy_cost)
+        self.assertFalse(br.place(sb.Order("BBCA", "SELL", 3), {"last": 9000}).ok)       # lebih dari yang dimiliki
+        self.assertFalse(br.place(sb.Order("BBCA", "BUY", 1, limit=9010), {"last": 9000}).ok)  # limit di luar fraksi
+        f = br.place(sb.Order("BBCA", "SELL", 2), {"last": 9500, "prev_close": 9000})
+        self.assertEqual(f.price, 9475)
+        self.assertAlmostEqual(f.pnl, 9475 * 200 * (1 - self.s.fee_sell) - buy_cost)
+        self.assertEqual(br.positions(), {})
+        self.assertFalse(br.place(sb.Order("BBCA", "BUY", 1), {"last": 10800, "prev_close": 9000}).ok)  # terkunci ARA
+        f = br.place(sb.Order("BBCA", "BUY", 1), {"last": 10775, "prev_close": 9000})     # 1 tick di bawah ARA
+        self.assertEqual(f.price, 10800)
+        self.assertFalse(br.place(sb.Order("BBCA", "SELL", 1), {"last": 7200, "prev_close": 9000}).ok)  # terkunci ARB
+
+    def test_quality_and_regime(self):
+        from saham import quality_ok, regime_on
+        base = {"roe": 0.2, "pe": 10, "earn_growth": 0.05, "der": None}
+        self.assertTrue(quality_ok(base)[0])
+        self.assertFalse(quality_ok({**base, "roe": 0.05})[0])
+        self.assertFalse(quality_ok({**base, "pe": -3})[0])
+        self.assertFalse(quality_ok({**base, "earn_growth": -0.2})[0])
+        self.assertFalse(quality_ok(None)[0])
+        up = {"2026-01-05": True, "2026-01-06": False}
+        self.assertFalse(regime_on(up, "2026-01-07"))      # tanggal tanpa data IHSG: pakai hari bursa sebelumnya
+        self.assertTrue(regime_on(up, "2026-01-05"))
+
+    def test_ipo_news_parse(self):
+        from saham_ipo import parse_news
+        xml = ("<item><title>IPO Bumi Atsiri Prima (BUAT) Buka Bookbuilding</title><link>u1</link>"
+               "<pubDate>Mon, 23 Nov 2026 01:00:00 GMT</pubDate></item>"
+               "<item><title>Laba Bank Central Asia (BBCA) naik</title><link>u2</link>"
+               "<pubDate>Mon, 23 Nov 2026 01:00:00 GMT</pubDate></item>"
+               "<item><title>IPO Anthropic (ANT) di Nasdaq</title><link>u3</link>"
+               "<pubDate>Mon, 23 Nov 2026 01:00:00 GMT</pubDate></item>")
+        self.assertEqual([x[0] for x in parse_news(xml)], ["BUAT"])
+
+    def test_live_broker_refuses(self):
+        with self.assertRaises(NotImplementedError):
+            self.sb.get_broker(self.conn, "t", self.sb.SahamSettings(broker="live"))
+
+
 if __name__ == "__main__":
     unittest.main()

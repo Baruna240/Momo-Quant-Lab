@@ -40,6 +40,8 @@ WSOL = "So11111111111111111111111111111111111111112"
 DEX_MIN_LIQ_USD = 3000  # abaikan pool DEX dengan likuiditas di bawah ini
 DEX_MAX_JUMP = 5.0      # tolak harga DEX yang melompat >5x (naik/turun) dari harga valid terakhir
 MAX_FILTER_CANDIDATES = 60
+MAX_MCAP_CANDIDATES = 150   # mode "mcap": koin yang dipantau bersamaan (dibuang kalau harga diam 3 mnt)
+TOKEN_SUPPLY = 1e9          # suplai standar koin pump.fun -> market cap = harga (SOL) x 1 miliar x harga SOL
 MAX_CURVE_MULT = 15  # bonding curve standar pump.fun mentok sekitar 14,7x dari harga peluncuran
 SPAM_WINDOW_SEC = 600
 # akun protokol pump.fun yang memegang suplai tambahan token "mayhem mode" (bukan dompet orang)
@@ -83,6 +85,7 @@ class Token:
     history: list = field(default_factory=list)  # [(waktu, harga)]
     creator: str = ""        # dompet pembuat koin
     dev_initial: float = 0.0  # jumlah token yang dibeli pembuat saat peluncuran
+    creator_n24: int = 0      # koin lain yang dibuat dompet pembuat dalam 24 jam terakhir (dev serial)
 
     def update(self, price, now):
         if price != self.price:
@@ -436,6 +439,7 @@ class Simulator:
         token = Token(d["mint"], (d.get("symbol") or "?")[:16], d["bondingCurveKey"], now, launch,
                       price=launch, last_change=now, creator=d.get("traderPublicKey") or "",
                       dev_initial=float(d.get("initialBuy") or 0))
+        token.creator_n24 = int(ctx.get("creator_n24") or 0)
         self.features.add(token, ctx=ctx)  # data belajar AI
         self.flow.start(token, token.creator, float(d.get("initialBuy") or 0), float(d.get("vSolInBondingCurve") or 0), ctx=ctx)
         if self.trading_paused:   # /stop dari Telegram: tidak membuka posisi baru
@@ -447,6 +451,8 @@ class Simulator:
             if st.cfg.mode == "langsung" and len(st.candidates) < room:
                 st.candidates[token.mint] = token
             elif st.cfg.mode == "filter" and room > 0 and len(st.candidates) < MAX_FILTER_CANDIDATES:
+                st.candidates[token.mint] = token
+            elif st.cfg.mode == "mcap" and room > 0 and len(st.candidates) < MAX_MCAP_CANDIDATES:
                 st.candidates[token.mint] = token
 
     async def poll_curves(self, tokens):
@@ -625,6 +631,9 @@ class Simulator:
             if st.paused or c.mode == "auto":
                 st.candidates.clear()
                 continue
+            if c.mode == "mcap":
+                self.evaluate_mcap(st, now)
+                continue
             for mint, t in list(st.candidates.items()):
                 age = now - t.created
                 if st.opened_in_batch + len(st.pending) >= s.coins_per_batch:
@@ -660,6 +669,35 @@ class Simulator:
                         task.add_done_callback(self.bg_tasks.discard)
                     else:
                         self.open_position(st, t)
+
+    def evaluate_mcap(self, st, now):
+        """Mode "mcap": tidak harus masuk paling awal. Koin dipantau sampai watch_min menit; dibeli begitu market cap
+        ada di jendela [mcap_min_usd, mcap_max_usd] SELAGI masih aktif (SOL riil cukup, harga naik dibanding 30 dtk
+        lalu, cukup banyak perubahan harga dalam 60 dtk terakhir)."""
+        c, s = st.cfg, self.s
+        open_now = sum(not p.closed for p in st.positions)
+        for mint, t in list(st.candidates.items()):
+            if st.opened_in_batch >= s.coins_per_batch or (c.max_open and open_now >= c.max_open):
+                return   # penuh: kandidat tetap dipantau, dicek lagi saat ada posisi yang tutup
+            age = now - t.created
+            if (age > c.watch_min * 60 or t.complete or (t.seen and now - t.last_change > 180)
+                    or (not t.seen and age > 30) or t.price > t.launch_price * MAX_CURVE_MULT):
+                del st.candidates[mint]
+                continue
+            if not t.seen:
+                continue
+            if c.max_creator_n24 >= 0 and t.creator_n24 > c.max_creator_n24:
+                del st.candidates[mint]   # dev serial: lebih sering gagal di kedua periode data
+                continue
+            mcap = t.price * TOKEN_SUPPLY * self.sol_usd
+            if not c.mcap_min_usd <= mcap <= c.mcap_max_usd:
+                continue
+            before = t.price_ago(30, now)
+            moves = sum(1 for (a, pa), (b, pb) in zip(t.history, t.history[1:]) if b >= now - 60 and pb != pa)
+            if t.real_sol >= c.filter_min_real_sol and before is not None and t.price > before and moves >= c.min_moves_60s:
+                del st.candidates[mint]
+                self.open_position(st, t)
+                open_now += 1
 
     # ------------------------------------------------------------------ anti-rug
     async def rpc(self, method, params):
@@ -762,8 +800,9 @@ class Simulator:
 
     def open_position(self, st, t):
         s = self.s
+        usd = st.cfg.stake_sol * self.sol_usd if st.cfg.stake_sol else s.per_coin_usd   # modal entry ini
         slip = self.slippage(t, "buy")
-        d = self.risk.check_entry(st.name, t.mint, s.per_coin_usd, slippage=slip, liquidity=t.real_sol)
+        d = self.risk.check_entry(st.name, t.mint, usd, slippage=slip, liquidity=t.real_sol)
         if d.blocked_by or d.shadow:
             self.db.execute("INSERT INTO risk_events VALUES (?,?,?,?,?)", (time.time(), st.name, t.mint,
                             "blokir" if not d.allowed else "catat", "; ".join(d.blocked_by + d.shadow)))
@@ -771,24 +810,24 @@ class Simulator:
         if not d.allowed:
             log(f"[{st.name}] RISIKO blokir {t.symbol}: {'; '.join(d.blocked_by)}")
             return
-        sol = s.per_coin_usd / self.sol_usd
-        net = sol * (1 - s.fee_pct) - s.tx_cost_sol
+        sol = usd / self.sol_usd
+        net = sol * (1 - s.fee_pct - st.cfg.extra_cost_pct) - s.tx_cost_sol
         entry = t.price * (1 + slip)
         qty = net / entry
         self.features.add(t, bought=True)
         stake, k = self.kelly_stake(st)
-        pos = Position(st.name, st.batch, t, time.time(), entry, qty, s.per_coin_usd, self.sol_usd,
+        pos = Position(st.name, st.batch, t, time.time(), entry, qty, usd, self.sol_usd,
                        kelly_stake=stake, remaining=qty, peak=t.price)
         st.positions.append(pos)
         st.opened_in_batch += 1
-        self.risk.on_open(st.name, t.mint, s.per_coin_usd)
-        self.record_trade(pos, "BELI", "masuk", entry, qty, sol, s.per_coin_usd, kelly_stake=stake, slip=slip)
+        self.risk.on_open(st.name, t.mint, usd)
+        self.record_trade(pos, "BELI", "masuk", entry, qty, sol, usd, kelly_stake=stake, slip=slip)
         # data token disimpan supaya posisi bisa dilanjutkan kalau simulator di-restart
         self.db.execute("INSERT OR REPLACE INTO position_meta(strategy,batch,mint,curve,launch,creator,dev_initial,created)"
                         " VALUES(?,?,?,?,?,?,?,?)", (st.name, st.batch, t.mint, t.curve, t.launch_price, t.creator,
                                                      t.dev_initial, t.created))
         self.db.commit()
-        log(f"[{st.name}] BELI {t.symbol} ${s.per_coin_usd:.2f} @ {t.price / t.launch_price:.2f}x harga"
+        log(f"[{st.name}] BELI {t.symbol} ${usd:.2f} (mcap ${t.price * TOKEN_SUPPLY * self.sol_usd:,.0f}) @ {t.price / t.launch_price:.2f}x harga"
             f" peluncuran, slip {slip:.1%} ({st.opened_in_batch}/{s.coins_per_batch}), Kelly: {k['status']} ${stake:.2f}")
 
     def sell(self, pos, qty, reason):
@@ -796,7 +835,9 @@ class Simulator:
         qty = min(qty, pos.remaining)
         slip = self.slippage(pos.token, "sell")
         gross = qty * pos.token.price * (1 - slip) * (1 - s.fee_pct)
-        net_sol = gross - s.tx_cost_sol if gross > s.tx_cost_sol else 0.0  # debu: ditinggalkan
+        # priority fee tambahan varian (mis. tiruan NEX): dihitung dari modal per koin, per transaksi jual
+        tx_cost = s.tx_cost_sol + pos.cost_usd / pos.sol_usd * self.strategies[pos.strategy].cfg.extra_cost_pct
+        net_sol = gross - tx_cost if gross > tx_cost else 0.0  # debu: ditinggalkan
         usd = net_sol * pos.sol_usd
         pos.remaining -= qty
         pos.proceeds_usd += usd

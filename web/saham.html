@@ -1,0 +1,287 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Saham BEI Paper</title>
+<style>
+:root {
+  color-scheme: dark;
+  --bg: #07090c; --panel: #0e1217; --panel-2: #121821; --line: #1d2530; --line-2: #2a3442;
+  --text: #dfe5ec; --text-2: #9aa6b4; --muted: #5f6b7a;
+  --amber: #f5c542; --cyan: #22d3ee; --green: #22c55e; --red: #ef4444; --orange: #f97316;
+  --s0: #3987e5; --s1: #d95926; --s2: #199e70; --s3: #9085e9; --s4: #e879f9; --s5: #2dd4bf; --s6: #fb7185;
+  --s7: #a3e635; --s8: #f97316;
+  --mono: ui-monospace, "Cascadia Mono", "JetBrains Mono", Consolas, "Courier New", monospace;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--bg); color: var(--text); }
+body { font: 12px/1.45 var(--mono); }
+a { color: var(--cyan); text-decoration: none; }
+.wrap { width: 100%; padding: 10px 12px 32px; }
+.top { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; padding: 8px 12px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 6px; margin-bottom: 10px; }
+.logo { width: 26px; height: 26px; border-radius: 5px; background: var(--red); color: #fff; display: grid;
+  place-items: center; font-weight: 800; font-size: 13px; }
+.brand b { font-size: 14px; letter-spacing: .08em; }
+.brand div { color: var(--muted); font-size: 10px; letter-spacing: .12em; }
+.badge { color: #0b0b0b; background: var(--orange); padding: 1px 6px; border-radius: 3px; font-weight: 700; font-size: 10px; letter-spacing: .1em; }
+.grow { flex: 1; }
+.chip { display: inline-flex; align-items: center; gap: 6px; padding: 3px 8px; border: 1px solid var(--line-2);
+  border-radius: 4px; color: var(--text-2); white-space: nowrap; }
+.chip b { color: var(--text); }
+#ihsg { white-space: normal; flex-wrap: wrap; max-width: 100%; }
+.dot { width: 7px; height: 7px; border-radius: 50%; background: var(--red); }
+.dot.on { background: var(--green); box-shadow: 0 0 8px var(--green); }
+.clock { font-size: 18px; font-weight: 700; }
+.grid { display: grid; grid-template-columns: repeat(12, 1fr); gap: 10px; }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 10px 12px; min-width: 0; }
+.panel h2 { margin: 0 0 8px; font-size: 11px; letter-spacing: .14em; color: var(--text-2); font-weight: 600; }
+.c3 { grid-column: span 3; } .c4 { grid-column: span 4; } .c5 { grid-column: span 5; } .c7 { grid-column: span 7; }
+.c8 { grid-column: span 8; } .c12 { grid-column: span 12; }
+@media (max-width: 1000px) { .c3 { grid-column: span 6; } .c4, .c5, .c7, .c8 { grid-column: span 12; } }
+@media (max-width: 560px) { .c3 { grid-column: span 12; } }
+.book .name { display: flex; align-items: center; gap: 6px; font-weight: 700; }
+.book .sw { width: 9px; height: 9px; border-radius: 2px; }
+.book .eq { font-size: 18px; font-weight: 700; margin: 4px 0 2px; }
+.book .desc { color: var(--muted); font-size: 10.5px; min-height: 28px; }
+.kv { display: flex; justify-content: space-between; color: var(--text-2); }
+.kv b { color: var(--text); font-weight: 600; }
+.up { color: var(--green) !important; } .dn { color: var(--red) !important; } .mut { color: var(--muted); }
+.tw { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; }
+th, td { padding: 4px 6px; text-align: right; white-space: nowrap; border-bottom: 1px solid var(--line); font-variant-numeric: tabular-nums; }
+th { color: var(--muted); font-weight: 600; font-size: 10.5px; letter-spacing: .06em; }
+th:first-child, td:first-child, .l { text-align: left; }
+tbody tr:hover { background: var(--panel-2); }
+form { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+label { display: grid; gap: 3px; color: var(--text-2); font-size: 10.5px; letter-spacing: .06em; }
+input { background: var(--bg); color: var(--text); border: 1px solid var(--line-2); border-radius: 4px; padding: 7px 8px; font: inherit; width: 100%; }
+input:focus { outline: 1px solid var(--cyan); }
+.sides { grid-column: span 2; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+button { font: inherit; font-weight: 700; letter-spacing: .1em; border: 0; border-radius: 4px; padding: 9px; cursor: pointer; color: #fff; }
+button.buy { background: #15803d; } button.sell { background: #b91c1c; }
+button:disabled { opacity: .5; cursor: wait; }
+.msg { grid-column: span 2; min-height: 18px; color: var(--text-2); }
+.note { color: var(--muted); font-size: 10.5px; margin-top: 8px; }
+svg { display: block; width: 100%; height: 220px; }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 12px; color: var(--text-2); margin-top: 6px; }
+.legend span { display: inline-flex; align-items: center; gap: 5px; }
+.empty { color: var(--muted); padding: 14px 0; text-align: center; }
+.err { color: var(--red); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top">
+    <div class="logo">ID</div>
+    <div class="brand"><b>SAHAM BEI</b><div>PAPER TRADING · DATA YAHOO (TERTUNDA)</div></div>
+    <span class="badge" id="mode">PAPER</span>
+    <span class="chip"><span class="dot" id="mdot"></span><span id="mtxt">—</span></span>
+    <span class="chip" id="ihsg" title="Strategi _ihsg dan _fund hanya membeli saat IHSG di atas EMA50">IHSG —</span>
+    <div class="grow"></div>
+    <span class="clock" id="clock">--:--:--</span><span class="mut">WIB</span>
+    <a class="chip" href="/">← MEMECOIN</a>
+    <a class="chip" href="/alt">ALTCOIN</a>
+  </div>
+
+  <div class="grid">
+    <div class="c12 grid" id="books" style="gap:10px"></div>
+
+    <div class="panel c8">
+      <h2>EQUITY PER BUKU</h2>
+      <div id="chart"><div class="empty">Belum ada titik equity. Jalankan <b>python saham.py</b>.</div></div>
+      <div class="legend" id="legend"></div>
+    </div>
+
+    <div class="panel c4">
+      <h2>ORDER MANUAL · BUKU "MANUAL"</h2>
+      <form id="order" autocomplete="off">
+        <label>KODE SAHAM<input id="sym" placeholder="BBCA" maxlength="6" required></label>
+        <label>LOT (1 LOT = 100 LBR)<input id="lots" type="number" min="1" step="1" value="1" required></label>
+        <label style="grid-column:span 2">LIMIT (KOSONG = HARGA PASAR)<input id="limit" type="number" min="1" step="1" placeholder="opsional"></label>
+        <div class="sides">
+          <button type="submit" class="buy" data-side="BUY">BELI</button>
+          <button type="submit" class="sell" data-side="SELL">JUAL</button>
+        </div>
+        <div class="msg" id="omsg"></div>
+      </form>
+      <div class="note" id="feenote"></div>
+    </div>
+
+    <div class="panel c7">
+      <h2>POSISI TERBUKA</h2>
+      <div class="tw"><table><thead><tr><th>BUKU</th><th class="l">KODE</th><th>LOT</th><th>AVG</th><th>LAST</th><th>NILAI</th><th>P/L</th><th>%</th><th>STOP</th></tr></thead>
+      <tbody id="pos"></tbody></table></div>
+    </div>
+
+    <div class="panel c5">
+      <h2>HARGA WATCHLIST</h2>
+      <div class="tw" style="max-height:330px;overflow-y:auto"><table><thead><tr><th>KODE</th><th>LAST</th><th>%</th><th>ROE</th><th>PER</th><th class="l">FUNDAMENTAL</th></tr></thead>
+      <tbody id="quotes"></tbody></table></div>
+    </div>
+
+    <div class="panel c12">
+      <h2>RADAR IPO · DARI BERITA &amp; ipo_manual.txt</h2>
+      <div class="tw"><table><thead><tr><th>KODE</th><th class="l">STATUS</th><th class="l">LISTING</th><th class="l">SUMBER</th><th class="l">BERITA / CATATAN</th></tr></thead>
+      <tbody id="ipo"></tbody></table></div>
+      <div class="note">Dibeli otomatis (buku <b>ipo_listing</b>) di 3 hari bursa pertama setelah listing, kecuali saat terkunci ARA. Tidak ikut e-IPO di harga penawaran: jatah penjatahan tidak bisa disimulasikan.</div>
+    </div>
+
+    <div class="panel c7">
+      <h2>TRANSAKSI TERAKHIR</h2>
+      <div class="tw" style="max-height:360px;overflow-y:auto"><table><thead><tr><th>WAKTU</th><th class="l">BUKU</th><th class="l">AKSI</th><th class="l">KODE</th><th>LOT</th><th>HARGA</th><th>FEE</th><th>P/L</th><th class="l">ALASAN</th></tr></thead>
+      <tbody id="trades"></tbody></table></div>
+    </div>
+
+    <div class="panel c5">
+      <h2>BACKTEST TERAKHIR (DATA 5 TAHUN)</h2>
+      <div class="tw"><table><thead><tr><th>STRATEGI</th><th>TRADE</th><th>WIN%</th><th>RETURN</th><th>MAX DD</th><th>PF</th><th>IHSG</th></tr></thead>
+      <tbody id="bt"></tbody></table></div>
+      <div class="note" id="btnote">Jalankan <b>python saham.py --backtest</b>. Hasil in-sample dengan sampel kecil: bukan bukti strategi akan untung.</div>
+    </div>
+  </div>
+</div>
+<script>
+const COLORS = ["var(--s0)", "var(--s1)", "var(--s2)", "var(--s3)", "var(--s4)", "var(--s5)", "var(--s6)", "var(--s7)", "var(--s8)", "var(--cyan)", "var(--amber)"];
+const $ = id => document.getElementById(id);
+const idr = x => x == null ? "—" : "Rp" + Math.round(x).toLocaleString("id-ID");
+const num = x => x == null ? "—" : Math.round(x).toLocaleString("id-ID");
+const pct = x => x == null ? "—" : (x > 0 ? "+" : "") + x.toFixed(2) + "%";
+const cls = x => x > 0 ? "up" : x < 0 ? "dn" : "";
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
+let colorOf = {};
+
+function tick() {
+  $("clock").textContent = new Date().toLocaleTimeString("id-ID", {timeZone: "Asia/Jakarta", hour12: false});
+}
+setInterval(tick, 1000); tick();
+
+function renderBooks(d) {
+  const order = [...Object.keys(d.strategies), "manual"];
+  const books = [...d.books].sort((a, b) => order.indexOf(a.book) - order.indexOf(b.book));
+  books.forEach((b, i) => colorOf[b.book] = COLORS[i % COLORS.length]);
+  $("books").innerHTML = books.length ? books.map(b => `
+    <div class="panel c3 book">
+      <div class="name"><span class="sw" style="background:${colorOf[b.book]}"></span>${esc(b.book)}</div>
+      <div class="eq">${idr(b.equity)} <span class="${cls(b.ret_pct)}" style="font-size:12px">${pct(b.ret_pct)}</span></div>
+      <div class="desc">${esc(d.strategies[b.book] || "order manual dari form di halaman ini / CLI")}</div>
+      <div class="kv">kas <b>${idr(b.cash)}</b></div>
+      <div class="kv">posisi terbuka <b>${b.open}</b></div>
+      <div class="kv">trade selesai <b>${b.closed}${b.closed ? " · " + Math.round(b.wins / b.closed * 100) + "% menang" : ""}</b></div>
+      <div class="kv">P/L terealisasi <b class="${cls(b.realized)}">${idr(b.realized)}</b></div>
+    </div>`).join("") : `<div class="panel c12 empty">Belum ada buku. Jalankan <b>python saham.py</b> (atau <b>--once</b>).</div>`;
+}
+
+function renderChart(d) {
+  const series = Object.entries(d.equity).filter(([, pts]) => pts.length > 1);
+  if (!series.length) return;
+  const all = series.flatMap(([, p]) => p);
+  const t0 = Math.min(...all.map(p => p[0])), t1 = Math.max(...all.map(p => p[0]));
+  const vals = all.map(p => p[1]).concat([d.budget]);
+  let lo = Math.min(...vals), hi = Math.max(...vals);
+  const pad = (hi - lo) * 0.08 || d.budget * 0.01; lo -= pad; hi += pad;
+  const W = 800, H = 220, L = 70, R = 8, T = 8, B = 20;
+  const x = t => L + (t - t0) / ((t1 - t0) || 1) * (W - L - R);
+  const y = v => T + (hi - v) / (hi - lo) * (H - T - B);
+  let g = "";
+  for (let k = 0; k <= 4; k++) {
+    const v = lo + (hi - lo) * k / 4;
+    g += `<line x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}" stroke="var(--line)"/>
+          <text x="${L - 6}" y="${y(v) + 3}" fill="var(--muted)" font-size="10" text-anchor="end">${(v / 1e6).toFixed(2)}jt</text>`;
+  }
+  g += `<line x1="${L}" x2="${W - R}" y1="${y(d.budget)}" y2="${y(d.budget)}" stroke="var(--text-2)" stroke-dasharray="3 3"/>`;
+  const fmtD = t => new Date(t * 1000).toLocaleDateString("id-ID", {day: "2-digit", month: "short", timeZone: "Asia/Jakarta"});
+  g += `<text x="${L}" y="${H - 4}" fill="var(--muted)" font-size="10">${fmtD(t0)}</text>
+        <text x="${W - R}" y="${H - 4}" fill="var(--muted)" font-size="10" text-anchor="end">${fmtD(t1)}</text>`;
+  for (const [book, pts] of series)
+    g += `<polyline fill="none" stroke="${colorOf[book] || "var(--text)"}" stroke-width="1.8"
+            points="${pts.map(p => x(p[0]).toFixed(1) + "," + y(p[1]).toFixed(1)).join(" ")}"/>`;
+  $("chart").innerHTML = `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">${g}</svg>`;
+  $("legend").innerHTML = series.map(([b]) => `<span><span class="dot" style="background:${colorOf[b]};box-shadow:none"></span>${esc(b)}</span>`).join("")
+    + `<span class="mut">- - - modal awal</span>`;
+}
+
+function render(d) {
+  $("mdot").className = "dot" + (d.market_open ? " on" : "");
+  $("mtxt").innerHTML = d.market_open ? "<b>BURSA BUKA</b>" : "BURSA TUTUP";
+  $("mode").textContent = d.broker === "live" ? "LIVE" : "PAPER";
+  $("feenote").innerHTML = `Fee beli ${(d.fee_buy * 100).toFixed(2)}% · jual ${(d.fee_sell * 100).toFixed(2)}% · slippage 1 tick · batas ARA/ARB.
+    ${d.market_open || d.manual_anytime ? "" : "<br><span class='err'>Bursa tutup: order ditolak (set SAHAM_MANUAL_ANYTIME=1 untuk mencoba).</span>"}`;
+  renderBooks(d);
+  renderChart(d);
+  $("pos").innerHTML = d.positions.length ? d.positions.map(p => {
+    const r = (p.last / p.avg_price - 1) * 100;
+    return `<tr><td>${esc(p.book)}</td><td class="l"><b>${esc(p.symbol)}</b></td><td>${p.lots}</td><td>${num(p.avg_price)}</td>
+      <td>${num(p.last)}</td><td>${idr(p.value)}</td><td class="${cls(p.pnl)}">${idr(p.pnl)}</td><td class="${cls(r)}">${pct(r)}</td>
+      <td class="mut">${p.stop ? num(p.stop) : "—"}</td></tr>`;
+  }).join("") : `<tr><td colspan="9" class="empty">Tidak ada posisi.</td></tr>`;
+  $("quotes").innerHTML = d.quotes.length ? d.quotes.map(q => {
+    const r = q.prev_close ? (q.last / q.prev_close - 1) * 100 : null;
+    const f = q.fund_ok == null ? `<span class="mut">—</span>` : `<span class="${q.fund_ok ? "up" : "dn"}">${q.fund_ok ? "✓" : "✗"}</span> <span class="mut">${esc(q.fund_ok ? "" : q.fund_why)}</span>`;
+    return `<tr><td title="${esc(q.name)}"><b>${esc(q.symbol)}</b></td><td>${num(q.last)}</td><td class="${cls(r)}">${pct(r)}</td>
+      <td>${q.roe == null ? "—" : (q.roe * 100).toFixed(0) + "%"}</td><td>${q.pe == null ? "—" : q.pe.toFixed(1)}</td><td class="l">${f}</td></tr>`;
+  }).join("") : `<tr><td colspan="6" class="empty">Belum ada harga.</td></tr>`;
+  const ST = {pipeline: ["belum listing", "mut"], listed: ["sudah listing · menunggu entry", "up"], entered: ["sudah dibeli", "up"],
+    terlewat: ["terlewat", "dn"], sudah_listing: ["saham lama (abaikan)", "mut"], kadaluarsa: ["kadaluarsa", "mut"]};
+  $("ipo").innerHTML = d.ipo.length ? d.ipo.map(i => {
+    const [t, c] = ST[i.status] || [i.status, ""];
+    const title = i.url ? `<a href="${esc(i.url)}" target="_blank" rel="noopener">${esc(i.title)}</a>` : esc(i.title);
+    return `<tr><td><b>${esc(i.symbol)}</b></td><td class="l ${c}">${t}</td><td class="l">${esc(i.listing_date || "—")}</td>
+      <td class="l mut">${esc(i.source)}</td><td class="l" style="white-space:normal">${title}${i.note ? ` <span class="mut">· ${esc(i.note)}</span>` : ""}</td></tr>`;
+  }).join("") : `<tr><td colspan="5" class="empty">Belum ada kandidat IPO.</td></tr>`;
+  if (d.ihsg) {
+    const r = (d.ihsg.last / d.ihsg.prev_close - 1) * 100;
+    $("ihsg").innerHTML = `IHSG <b>${num(d.ihsg.last)}</b> <span class="${cls(r)}">${pct(r)}</span> · <b class="${d.ihsg.up ? "up" : "dn"}">${d.ihsg.up ? "TREN NAIK" : "TREN TURUN · _ihsg tidak beli"}</b>`;
+  }
+  $("trades").innerHTML = d.trades.length ? d.trades.map(t => `<tr>
+      <td class="mut">${new Date(t.ts * 1000).toLocaleString("id-ID", {timeZone: "Asia/Jakarta", day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit"})}</td>
+      <td class="l">${esc(t.book)}</td><td class="l ${t.side === "BUY" ? "up" : "dn"}">${t.side === "BUY" ? "BELI" : "JUAL"}</td>
+      <td class="l"><b>${esc(t.symbol)}</b></td><td>${t.lots}</td><td>${num(t.price)}</td><td class="mut">${num(t.fee)}</td>
+      <td class="${t.side === "SELL" ? cls(t.pnl) : "mut"}">${t.side === "SELL" ? idr(t.pnl) : "—"}</td>
+      <td class="l mut" style="max-width:260px;overflow:hidden;text-overflow:ellipsis" title="${esc(t.reason)}">${esc(t.reason)}</td></tr>`).join("")
+    : `<tr><td colspan="9" class="empty">Belum ada transaksi.</td></tr>`;
+  $("bt").innerHTML = d.backtest.length ? d.backtest.map(b => `<tr><td>${esc(b.strategy)}</td><td>${b.trades}</td>
+      <td>${b.trades ? Math.round(b.wins / b.trades * 100) + "%" : "—"}</td><td class="${cls(b.ret_pct)}">${pct(b.ret_pct)}</td>
+      <td class="dn">${b.max_dd.toFixed(1)}%</td><td>${b.pf == null ? "—" : b.pf.toFixed(2)}</td>
+      <td class="${cls(b.bench_pct)}">${pct(b.bench_pct)}</td></tr>`).join("")
+    : `<tr><td colspan="7" class="empty">Belum ada backtest.</td></tr>`;
+  if (d.backtest.length) $("btnote").innerHTML = `Periode ${esc(d.backtest[0].start)} s/d ${esc(d.backtest[0].end)}. IHSG = buy &amp; hold periode yang sama. Hasil in-sample: bukan bukti strategi akan untung. Varian _fund dan ipo_listing tidak bisa di-backtest (hanya forward test).`;
+}
+
+async function load() {
+  try {
+    const r = await fetch("/api/saham/summary");
+    const d = await r.json();
+    if (d.error) throw new Error(d.error);
+    render(d);
+  } catch (e) {
+    $("mtxt").innerHTML = `<span class="err">gagal memuat: ${esc(e.message)}</span>`;
+  }
+}
+
+let side = "BUY";
+document.querySelectorAll("#order button").forEach(b => b.addEventListener("click", () => side = b.dataset.side));
+$("order").addEventListener("submit", async ev => {
+  ev.preventDefault();
+  const btns = document.querySelectorAll("#order button");
+  btns.forEach(b => b.disabled = true);
+  $("omsg").textContent = "mengirim order simulasi…";
+  try {
+    const r = await fetch("/api/saham/order", {method: "POST", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({symbol: $("sym").value.trim(), side, lots: +$("lots").value, limit: +$("limit").value || 0})});
+    const d = await r.json();
+    $("omsg").innerHTML = `<span class="${d.ok ? "up" : "err"}">${esc(d.msg)}</span>`;
+    load();
+  } catch (e) {
+    $("omsg").innerHTML = `<span class="err">${esc(e.message)}</span>`;
+  } finally {
+    btns.forEach(b => b.disabled = false);
+  }
+});
+
+load();
+setInterval(load, 30000);
+</script>
+</body>
+</html>

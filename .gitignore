@@ -16,3 +16,5 @@ __pycache__/
 *.pyc
 .venv/
 .pytest_cache/
+pumpfun_leaderboard.txt
+sawit-web/

@@ -347,6 +347,64 @@ def lab_summary(conn):
     return out
 
 
+# ================= halaman Copy Trade: dompet leader yang ditiru + hasil forward test (wallet_lab.db, hanya dibaca)
+COPY_PAGE = BASE_DIR / "web" / "copy.html"
+COPY_KEYS = ("pnl_sol", "roi", "win_rate", "n_closed", "n_open", "avg_cost", "med_hold", "med_delay", "trips_per_h",
+             "med_win", "med_loss", "style", "rank", "age_days", "capped", "first_ts", "trades_per_day", "med_cost",
+             "cut_loss_share", "reject")
+
+
+def copy_summary():
+    import wallet_lab as wl
+    hold_group = wl.hold_group
+    out = {"leaders": [], "board": [], "rejected": [], "groups": [], "wallet_runs": {}, "last_run": None,
+           "rules": {"top": wl.LEADERBOARD_TOP, "min_age": wl.MIN_AGE_DAYS, "min_trips": wl.MIN_TRIPS,
+                     "min_trips_holder": wl.MIN_TRIPS_HOLDER, "win": wl.WIN_RANGE, "per_day": wl.TRADES_PER_DAY,
+                     "size": wl.SIZE_SOL, "min_hold": wl.MIN_HOLD_SEC, "cut_loss": wl.CUT_LOSS_MIN}}
+    WL_DB = wl.LAB_DB
+    if not WL_DB.exists():
+        return out
+    c = sqlite3.connect(f"file:{WL_DB}?mode=ro", uri=True, timeout=5)
+    c.row_factory = sqlite3.Row
+    try:
+        tables = {r[0] for r in c.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+        pick = lambda st: {k: st.get(k) for k in COPY_KEYS}   # noqa: E731
+        for r in c.execute("SELECT * FROM leaders ORDER BY picked"):
+            st = json.loads(r["stats"])
+            out["leaders"].append({"wallet": r["wallet"], "picked": r["picked"], "group": hold_group(st), **pick(st)})
+        prof = [(r["wallet"], json.loads(r["stats"])) for r in c.execute("SELECT * FROM profiles")]
+        src = {}
+        if "sources" in tables:
+            for r in c.execute("SELECT * FROM sources WHERE source='pumpfun' ORDER BY rank"):
+                src[r["wallet"]] = {"src_rank": r["rank"], "src_name": r["name"], "src_pnl": r["pnl_usd"], "src_ts": r["ts"]}
+        for x in out["leaders"]:
+            x.update(src.get(x["wallet"], {}))
+        lead = {x["wallet"] for x in out["leaders"]}
+        stats = dict(prof)
+        if src:   # papan = leaderboard pump.fun peringkat 1-10, dengan hasil filter kita untuk tiap dompet
+            out["source"] = "pump.fun (Traders, 1D)"
+            out["board"] = [{"wallet": w, "group": hold_group(stats.get(w, {})), "leader": w in lead, "profiled": w in stats,
+                             **pick(stats.get(w, {})), **m} for w, m in src.items() if m["src_rank"] <= wl.LEADERBOARD_TOP]
+            out["rejected"] = [x for x in out["board"] if x.get("reject")]
+        else:
+            ranked = sorted(prof, key=lambda x: -(x[1].get("pnl_sol") or -1e9))
+            board = [(w, st) for w, st in ranked if st.get("reject") == []][:wl.LEADERBOARD_TOP]
+            out["board"] = [{"wallet": w, "group": hold_group(st), "leader": w in lead, "profiled": True, **pick(st)} for w, st in board]
+            out["rejected"] = [{"wallet": w, "group": hold_group(st), **pick(st)} for w, st in ranked if st.get("reject")][:20]
+        out["n_profiles"] = len(prof)
+        if "forward_runs" in tables:
+            last = c.execute("SELECT MAX(ts) FROM forward_runs").fetchone()[0]
+            out["last_run"] = last
+            out["groups"] = [dict(r) for r in c.execute("SELECT * FROM forward_runs ORDER BY ts")]
+        if "forward_wallets" in tables:
+            last = c.execute("SELECT MAX(ts) FROM forward_wallets").fetchone()[0]
+            for r in c.execute("SELECT * FROM forward_wallets WHERE ts=?", (last,)):
+                out["wallet_runs"].setdefault(r["wallet"], []).append(dict(r))
+    finally:
+        c.close()
+    return _clean(out)
+
+
 # ================= tema PRISM: konsol riset (leaderboard lengkap, biaya, risiko, 8 agent)
 PRISM_PAGE = BASE_DIR / "web" / "prism.html"
 LAB_DB = BASE_DIR / "wallet_lab.db"
@@ -381,6 +439,82 @@ def _ro(path):
     c = sqlite3.connect(f"file:{path}?mode=ro", uri=True, timeout=5)
     c.row_factory = sqlite3.Row
     return c
+
+
+# ================= halaman Saham BEI: paper trading saham Indonesia (saham.db)
+SAHAM_PAGE = BASE_DIR / "web" / "saham.html"
+
+
+def saham_summary():
+    from saham_broker import SAHAM_DB, load_saham_settings, market_open
+    from saham import STRATEGIES as SAHAM_STRATEGIES
+    s = load_saham_settings()
+    out = {"market_open": market_open(), "broker": s.broker, "budget": s.budget_idr, "max_positions": s.max_positions,
+           "manual_anytime": s.manual_anytime, "fee_buy": s.fee_buy, "fee_sell": s.fee_sell,
+           "strategies": {st.name: st.desc for st in SAHAM_STRATEGIES},
+           "books": [], "positions": [], "trades": [], "quotes": [], "equity": {}, "backtest": [], "ipo": [], "ihsg": None}
+    conn = _ro(SAHAM_DB)
+    if not conn:
+        return out
+    try:
+        quotes = {r["symbol"]: dict(r) for r in conn.execute("SELECT * FROM quotes ORDER BY symbol")}
+        out["quotes"] = list(quotes.values())
+        for a in conn.execute("SELECT * FROM accounts ORDER BY book"):
+            book = a["book"]
+            pos = [dict(r) for r in conn.execute("SELECT * FROM positions WHERE book=?", (book,))]
+            for p in pos:
+                p["last"] = (quotes.get(p["symbol"]) or {}).get("last") or p["avg_price"]
+                p["value"] = p["lots"] * 100 * p["last"]
+                p["pnl"] = p["value"] - p["cost"]
+            out["positions"] += pos
+            t = conn.execute("SELECT COUNT(*) n, COALESCE(SUM(pnl > 0), 0) w, COALESCE(SUM(pnl), 0) pnl, "
+                             "COALESCE(SUM(fee), 0) fee FROM trades WHERE book=? AND side='SELL'", (book,)).fetchone()
+            eq = a["cash"] + sum(p["value"] for p in pos)
+            out["books"].append({"book": book, "cash": a["cash"], "start": a["start"], "equity": eq,
+                                 "ret_pct": (eq / a["start"] - 1) * 100, "open": len(pos), "closed": t["n"],
+                                 "wins": t["w"], "realized": t["pnl"]})
+            out["equity"][book] = [[r["ts"], r["equity"]] for r in
+                                   conn.execute("SELECT ts, equity FROM equity WHERE book=? ORDER BY ts", (book,))]
+        out["trades"] = [dict(r) for r in conn.execute("SELECT * FROM trades ORDER BY ts DESC LIMIT 100")]
+        from saham import quality_ok
+        from saham_ipo import DESC as IPO_DESC
+        out["strategies"]["ipo_listing"] = IPO_DESC
+        funds = {r["symbol"]: dict(r) for r in conn.execute("SELECT * FROM fundamentals")}
+        for q in out["quotes"]:
+            f = funds.get(q["symbol"])
+            q["roe"], q["pe"] = (f or {}).get("roe"), (f or {}).get("pe")
+            q["fund_ok"], q["fund_why"] = quality_ok(f) if f else (None, "")
+        ih = quotes.get("IHSG")
+        out["ihsg"] = {"last": ih["last"], "prev_close": ih["prev_close"], "up": ih["name"] == "naik"} if ih else None
+        out["quotes"] = [q for q in out["quotes"] if q["symbol"] != "IHSG"]
+        out["ipo"] = [dict(r) for r in conn.execute("SELECT symbol, title, url, source, first_seen, status, listing_date,"
+                                                     " note FROM ipo WHERE status != 'mark' ORDER BY first_seen DESC")]
+        last = conn.execute("SELECT MAX(ts) FROM backtests").fetchone()[0]
+        if last:
+            out["backtest"] = [dict(r) for r in conn.execute("SELECT * FROM backtests WHERE ts=?", (last,))]
+    finally:
+        conn.close()
+    return _clean(out)
+
+
+def saham_order(body):
+    """Order manual dari halaman web, selalu ke buku 'manual' lewat broker yang sama dengan CLI."""
+    from saham import manual_order
+    side = str(body.get("side", "")).upper()
+    sym = "".join(ch for ch in str(body.get("symbol", "")).upper() if ch.isalnum())[:6]
+    try:
+        lots = int(body.get("lots", 0))
+        limit = float(body.get("limit") or 0)
+    except (TypeError, ValueError):
+        return {"ok": False, "msg": "lot/limit harus angka"}
+    if side not in ("BUY", "SELL") or not sym:
+        return {"ok": False, "msg": "isi kode saham dan pilih BELI/JUAL"}
+    args = [side, sym, str(lots)] + ([str(limit)] if limit else [])
+    try:
+        msg = manual_order(args)
+    except Exception as e:
+        return {"ok": False, "msg": f"gagal: {type(e).__name__}: {e}"}
+    return {"ok": not msg.startswith(("DITOLAK", "Bursa")), "msg": msg}
 
 
 # pemindai altcoin multi-timeframe (Fase 4): dihitung di latar belakang supaya halaman tetap cepat
@@ -616,6 +750,14 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send(ALT_ABYSS_PAGE.read_bytes(), "text/html; charset=utf-8")
             if url.path in ("/prism", "/prism.html", "/prism-alt"):
                 return self.send(PRISM_PAGE.read_bytes(), "text/html; charset=utf-8")
+            if url.path in ("/copy", "/copy.html"):
+                return self.send(COPY_PAGE.read_bytes(), "text/html; charset=utf-8")
+            if url.path == "/api/copy":
+                return self.send(copy_summary())
+            if url.path in ("/saham", "/saham.html"):
+                return self.send(SAHAM_PAGE.read_bytes(), "text/html; charset=utf-8")
+            if url.path == "/api/saham/summary":
+                return self.send(saham_summary())
             conn = db()
             try:
                 if url.path == "/api/summary":
@@ -636,6 +778,24 @@ class Handler(BaseHTTPRequestHandler):
             self.send({"error": f"database sibuk: {e}"}, code=503)
         except Exception as e:      # error lain dikirim sebagai pesan, bukan memutus koneksi (halaman tidak kosong diam-diam)
             self.send({"error": f"{type(e).__name__}: {e}"}, code=500)
+
+
+    def do_POST(self):
+        url = urlparse(self.path)
+        origin = self.headers.get("Origin", "")
+        # hanya halaman dashboard ini sendiri yang boleh mengirim order (cegah situs lain menembak localhost)
+        if origin and origin not in (f"http://localhost:{PORT}", f"http://127.0.0.1:{PORT}"):
+            return self.send({"ok": False, "msg": "origin ditolak"}, code=403)
+        if "application/json" not in self.headers.get("Content-Type", ""):
+            return self.send({"ok": False, "msg": "harus JSON"}, code=415)
+        try:
+            n = min(int(self.headers.get("Content-Length", 0)), 4096)
+            body = json.loads(self.rfile.read(n) or b"{}")
+            if url.path == "/api/saham/order":
+                return self.send(saham_order(body))
+            self.send({"error": "not found"}, code=404)
+        except Exception as e:
+            self.send({"ok": False, "msg": f"{type(e).__name__}: {e}"}, code=500)
 
 
 def main():
