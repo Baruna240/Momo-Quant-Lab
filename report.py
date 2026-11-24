@@ -17,6 +17,13 @@ CREATE TABLE IF NOT EXISTS batches(
     invested REAL, returned REAL, pnl REAL);
 CREATE TABLE IF NOT EXISTS prices(mint TEXT, ts REAL, price REAL);
 CREATE INDEX IF NOT EXISTS prices_mint ON prices(mint, ts);
+-- indeks untuk dashboard: tanpa ini setiap ringkasan membaca seluruh tabel puluhan kali
+CREATE INDEX IF NOT EXISTS positions_strategy_closed ON positions(strategy, closed);
+CREATE INDEX IF NOT EXISTS positions_closed ON positions(closed);
+CREATE INDEX IF NOT EXISTS positions_key ON positions(mint, strategy, batch);
+CREATE INDEX IF NOT EXISTS trades_key ON trades(mint, strategy, batch, side);
+CREATE INDEX IF NOT EXISTS trades_strategy_ts ON trades(strategy, ts);
+CREATE INDEX IF NOT EXISTS trades_ts ON trades(ts);
 CREATE TABLE IF NOT EXISTS stats(key TEXT PRIMARY KEY, value REAL);
 CREATE TABLE IF NOT EXISTS position_meta(
     strategy TEXT, batch INT, mint TEXT, curve TEXT, launch REAL, creator TEXT, dev_initial REAL, created REAL,
