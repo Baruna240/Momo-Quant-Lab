@@ -3,6 +3,7 @@ Hanya MEMBACA simulasi.db, jadi aman dijalankan bersamaan dengan sim.py."""
 import json
 import sqlite3
 import sys
+import threading
 import time
 import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -71,6 +72,25 @@ def metrics(conn, scope, now):
     }
 
 
+EQUITY_MAX_POINTS = 600   # cukup untuk grafik selebar layar; bentuk kurva (puncak & lembah) tetap terjaga
+
+
+def thin_curve(points, limit=EQUITY_MAX_POINTS):
+    """Ringkas kurva [[t, v], ...] untuk grafik: per potongan waktu simpan titik terendah & tertinggi (urut waktu),
+    sehingga drawdown dan puncak tidak hilang. Titik pertama dan terakhir selalu ikut; nilai dibulatkan 4 desimal."""
+    if len(points) > limit:
+        size = len(points) / (limit / 2)
+        out, i = [points[0]], 1
+        while i < len(points) - 1:
+            chunk = points[i:min(len(points) - 1, int(i + size) or i + 1)]
+            lo, hi = min(chunk, key=lambda p: p[1]), max(chunk, key=lambda p: p[1])
+            out += sorted({id(lo): lo, id(hi): hi}.values(), key=lambda p: p[0])
+            i += len(chunk)
+        out.append(points[-1])
+        points = out
+    return [[t, round(v, 4)] for t, v in points]
+
+
 def equity(conn, scope, kelly=False):
     """PnL kumulatif per waktu. kelly=True: seandainya ukuran taruhan mengikuti rem Kelly."""
     where, args = scope_filter(scope)
@@ -114,9 +134,9 @@ def summary(conn):
     for scope in ["all"] + names:
         where, args = scope_filter(scope)
         out["scopes"][scope] = metrics(conn, scope, now)
-        out["equity"][scope] = equity(conn, scope)
-        out["equity_kelly"][scope] = equity(conn, scope, kelly=True)
-        out["returns"][scope] = [r[0] for r in conn.execute(
+        out["equity"][scope] = thin_curve(equity(conn, scope))
+        out["equity_kelly"][scope] = thin_curve(equity(conn, scope, kelly=True))
+        out["returns"][scope] = [None if r[0] is None else round(r[0], 4) for r in conn.execute(
             "SELECT ret_mult FROM positions WHERE 1=1" + where + " ORDER BY closed DESC LIMIT 3000", args)]
         out["peaks"][scope] = [
             {"label": label, "count": conn.execute(
@@ -740,6 +760,36 @@ def quant_summary(conn):
     return _clean(out)
 
 
+def _with_db(fn):
+    def build():
+        conn = db()
+        try:
+            return fn(conn)
+        finally:
+            if conn:
+                conn.close()
+    return build
+
+
+# halaman meme memanggil ringkasan tiap 5-10 detik; tanpa cache setiap tab menghitung ulang dari nol
+HEAVY = {"/api/summary": _with_db(summary), "/api/lab": _with_db(lab_summary), "/api/quant": _with_db(quant_summary)}
+CACHE_TTL = {"/api/summary": 4, "/api/lab": 4, "/api/quant": 10}
+CACHE = {}
+CACHE_LOCK = threading.Lock()
+
+
+def cached_json(key, ttl, build):
+    """JSON siap kirim untuk `key`, dihitung ulang paling sering tiap `ttl` detik. Permintaan yang datang bersamaan
+    menunggu satu perhitungan yang sama, bukan menghitung sendiri-sendiri."""
+    with CACHE_LOCK:
+        hit = CACHE.get(key)
+        if hit and time.time() - hit[0] < ttl:
+            return hit[1]
+        data = json.dumps(build()).encode()
+        CACHE[key] = (time.time(), data)
+        return data
+
+
 class Handler(BaseHTTPRequestHandler):
     def log_message(self, *args):
         pass
@@ -783,14 +833,10 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send(saham_agents())
             if url.path == "/api/saham/summary":
                 return self.send(saham_summary())
+            if url.path in CACHE_TTL:      # ringkasan berat: dihitung sekali, dipakai bersama semua tab selama beberapa detik
+                return self.send(cached_json(url.path, CACHE_TTL[url.path], HEAVY[url.path]))
             conn = db()
             try:
-                if url.path == "/api/summary":
-                    return self.send(summary(conn))
-                if url.path == "/api/lab":
-                    return self.send(lab_summary(conn))
-                if url.path == "/api/quant":
-                    return self.send(quant_summary(conn))
                 if url.path == "/api/positions":
                     return self.send(positions(conn, q.get("status", "closed")))
                 if url.path == "/api/coin":

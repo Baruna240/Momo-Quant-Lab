@@ -492,6 +492,24 @@ class AgentTest(unittest.TestCase):
         self.assertGreater(research.t_needed(100), research.t_needed(28))
 
 
+class DashboardCurveTest(unittest.TestCase):
+    def test_thin_curve_keeps_shape(self):
+        from dashboard import thin_curve
+        import math
+        pts = [[1000 + i, math.sin(i / 300) * 50 + (i % 7)] for i in range(13000)]
+        pts[6000][1] = -500.0          # lembah tajam (drawdown) harus tetap terlihat
+        pts[9000][1] = 400.0           # puncak tajam juga
+        out = thin_curve(pts, 600)
+        self.assertLessEqual(len(out), 610)
+        self.assertEqual(out[0][0], pts[0][0])
+        self.assertEqual(out[-1], [pts[-1][0], round(pts[-1][1], 4)])
+        self.assertIn([pts[6000][0], -500.0], out)
+        self.assertIn([pts[9000][0], 400.0], out)
+        times = [t for t, _ in out]
+        self.assertEqual(times, sorted(set(times)))          # grafik butuh waktu unik & naik
+        self.assertEqual(thin_curve([[1, 0.123456]]), [[1, 0.1235]])
+
+
 class SahamTest(unittest.TestCase):
     def setUp(self):
         import saham_broker as sb
